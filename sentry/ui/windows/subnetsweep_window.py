@@ -151,3 +151,4 @@ class SubnetSweepWindow(BaseToolWindow):
         self.summary_text.delete("1.0", "end")
         self.latest_results = None
         self.set_status("Listo.")
+

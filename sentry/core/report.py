@@ -239,3 +239,4 @@ def generate_html_report(data: Dict[str, Any], title: Optional[str] = None) -> s
 </html>
 """
     return html
+

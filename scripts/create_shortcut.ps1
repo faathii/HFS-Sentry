@@ -1,4 +1,4 @@
-﻿$WshShell = New-Object -ComObject WScript.Shell
+$WshShell = New-Object -ComObject WScript.Shell
 
 $projectDir = "C:\Users\hamza\Desktop\HFS-Sentry"
 $pythonw = "C:\Python314\pythonw.exe"
@@ -25,3 +25,4 @@ $s2.Description = "HFS-Sentry — Cybersecurity Diagnostic Suite"
 $s2.Save()
 
 Write-Host "Shortcuts created successfully!"
+

@@ -194,3 +194,4 @@ def apply_suite_theme(root: tk.Tk) -> None:
         background=COLORS["accent_cyan"],
         bordercolor=COLORS["border"],
     )
+
