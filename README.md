@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.jpg" alt="HFS-Sentry Banner" width="600" style="border-radius: 8px;">
+</p>
+
 # HFS-Sentry 🛡️
 > **Suite Modular de Ciberseguridad & Diagnóstico de Infraestructuras**  
 > *Zero External Dependencies | Pure Standard Python 3 | High-Performance & Low Overhead*
