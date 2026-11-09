@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hfs-sentry"
+version = "1.0.0"
+authors = [
+  { name = "Hamza El Fathi Sofyani" }
+]
+description = "High-density, zero-dependency cybersecurity and infrastructure diagnostic suite in pure Python 3."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+keywords = ["cybersecurity", "security-tools", "port-scanner", "log-analyzer", "ssl-checker", "fim", "audit"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Information Technology",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Security",
+  "Topic :: System :: Networking :: Monitoring",
+  "Topic :: System :: Systems Administration",
+]
+
+[project.urls]
+Homepage = "https://github.com/faathii/HFS-Sentry"
+Repository = "https://github.com/faathii/HFS-Sentry.git"
+Issues = "https://github.com/faathii/HFS-Sentry/issues"
+
+[project.scripts]
+hfs-sentry = "sentry.cli:main"
+sentry = "sentry.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sentry*"]
