@@ -41,9 +41,21 @@ FONTS = {
 _IMAGE_CACHE: Dict[str, ImageTk.PhotoImage] = {}
 
 
+def resolve_resource_path(relative_path: str) -> str:
+    """Resolve asset path for development mode, local execution and PyInstaller bundles."""
+    if os.path.isfile(relative_path):
+        return relative_path
+    base_dir = getattr(sys, "_MEIPASS", os.path.abspath("."))
+    candidate = os.path.join(base_dir, relative_path)
+    if os.path.isfile(candidate):
+        return candidate
+    return relative_path
+
+
 def load_icon(path: str, size: tuple = (48, 48)) -> Optional[ImageTk.PhotoImage]:
     """Load, resize and cache image with transparency support."""
-    key = f"{path}_{size[0]}x{size[1]}"
+    actual_path = resolve_resource_path(path)
+    key = f"{actual_path}_{size[0]}x{size[1]}"
     if key in _IMAGE_CACHE:
         cached = _IMAGE_CACHE[key]
         try:
@@ -55,11 +67,11 @@ def load_icon(path: str, size: tuple = (48, 48)) -> Optional[ImageTk.PhotoImage]
         except Exception:
             _IMAGE_CACHE.pop(key, None)
 
-    if not os.path.isfile(path):
+    if not os.path.isfile(actual_path):
         return None
 
     try:
-        img = Image.open(path).convert("RGBA")
+        img = Image.open(actual_path).convert("RGBA")
         img = img.resize(size, Image.Resampling.LANCZOS)
         photo = ImageTk.PhotoImage(img)
         _IMAGE_CACHE[key] = photo
