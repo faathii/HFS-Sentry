@@ -62,3 +62,7 @@ block_threats.sh
 *.baseline.json
 *.lnk
 
+# Screenshots & sensitive local captures
+assets/screenshots/
+
+
