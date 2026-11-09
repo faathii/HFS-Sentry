@@ -64,6 +64,7 @@ class SentrySuiteApp(tk.Tk):
         tools_menu.add_command(label="SubnetSweep — Descubridor de Activos de Red", command=lambda: self.launch_tool("subnetsweep"))
         tools_menu.add_command(label="IntegrityGuard — Monitor de Integridad (FIM)", command=lambda: self.launch_tool("integrityguard"))
         tools_menu.add_command(label="DnsProbe — Reconocimiento DNS & Anti-Spoofing", command=lambda: self.launch_tool("dnsprobe"))
+        tools_menu.add_command(label="TrafficSentry — Auditor de Sockets & Conexiones Activas", command=lambda: self.launch_tool("trafficsentry"))
         menubar.add_cascade(label="Herramientas", menu=tools_menu)
 
         # Ajustes
@@ -118,7 +119,10 @@ class SentrySuiteApp(tk.Tk):
         ttk.Label(telemetry_box, text="TELEMETRÍA DEL SISTEMA LOCAL", font=FONTS["title_small"], foreground=COLORS["accent_cyan"]).pack(anchor="w", pady=(0, 4))
         ttk.Label(telemetry_box, text=f"• Hostname: {hostname}  |  IP Local: {local_ip}", font=FONTS["caption"], foreground=COLORS["text_secondary"]).pack(anchor="w")
         ttk.Label(telemetry_box, text=f"• Sistema: {os_info}  |  Python: {platform.python_version()}", font=FONTS["caption"], foreground=COLORS["text_secondary"]).pack(anchor="w")
-        ttk.Label(telemetry_box, text="• Motor: 100% Nativo Local (Cero dependencias externas)", font=FONTS["caption"], foreground=COLORS["accent_green"]).pack(anchor="w")
+        ttk.Label(telemetry_box, text="• Motor: 100% Nativo Local (Cero dependencias externas)", font=FONTS["caption"], foreground=COLORS["accent_green"]).pack(anchor="w", pady=(0, 8))
+
+        btn_qa = ttk.Button(telemetry_box, text="⚡ Auditoría Rápida del Sistema", style="Primary.TButton", command=self.open_quick_audit)
+        btn_qa.pack(anchor="w")
 
     def _build_tools_grid(self) -> None:
         """Create responsive grid of launch cards for each tool in the suite."""
@@ -192,6 +196,14 @@ class SentrySuiteApp(tk.Tk):
                 "category": "DNS & EMAIL",
                 "icon": "hfs_sentry.png",
                 "desc": "Reconocimiento y auditoría de registros DNS públicos y defensa contra suplantación de correo electrónico (verificación estricta de políticas SPF, DMARC y validación de firma DNSSEC).",
+            },
+            {
+                "id": "trafficsentry",
+                "name": "TrafficSentry",
+                "version": "1.0.0",
+                "category": "HOST & SOCKETS",
+                "icon": "subnetsweep.png",
+                "desc": "Auditoría de conexiones activas del sistema operativo y detección de daemons o servicios sensibles expuestos a 0.0.0.0 (todas las interfaces) en lugar de localhost.",
             },
         ]
 
@@ -270,6 +282,11 @@ class SentrySuiteApp(tk.Tk):
             foreground=COLORS["accent_green"]
         )
         lbl_lic.pack(side="right")
+
+    def open_quick_audit(self) -> None:
+        """Open the 1-Click System Quick Audit dialog."""
+        from sentry.ui.quick_audit_dialog import QuickAuditDialog
+        QuickAuditDialog(self)
 
     def launch_tool(self, tool_id: str) -> None:
         """Open the requested tool in a dedicated, independent desktop window."""

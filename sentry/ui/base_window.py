@@ -245,6 +245,15 @@ class BaseToolWindow(tk.Toplevel):
             finally:
                 if not self.stop_requested.is_set():
                     self.set_status("Análisis finalizado.", state="success")
+                    try:
+                        from sentry.ui.notifications import notify_user
+                        notify_user(
+                            title=f"{self.tool_title}",
+                            message="Diagnóstico completado. Revise los resultados estructurados.",
+                            level="success"
+                        )
+                    except Exception:
+                        pass
 
         self.worker_thread = threading.Thread(target=_run_wrapper, daemon=True)
         self.worker_thread.start()

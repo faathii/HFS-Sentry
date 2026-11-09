@@ -59,6 +59,7 @@
 | <img src="assets/logos/subnetsweep.png" width="52"><br>**`subnetsweep`** | Infraestructura | Descubridor concurrente de dispositivos en subredes CIDR (/24) mediante sondas TCP/ICMP y mapeo de fabricantes según prefijo OUI IEEE. | Inventario de hosts activos, direcciones MAC y fabricantes detectados. |
 | <img src="assets/logos/integrityguard.png" width="52"><br>**`integrityguard`** | HIDS / Forense | Monitor de Integridad de Archivos (FIM) con firmas criptográficas SHA-256 para prevenir alteraciones no autorizadas en archivos del sistema. | Detección en milisegundos de modificaciones, eliminaciones y archivos sospechosos. |
 | <img src="assets/logos/hfs_sentry.png" width="52"><br>**`dnsprobe`** | DNS & Email | Auditoría de registros DNS (A, AAAA, MX, TXT, CAA) y postura de seguridad de correo (validación de SPF, DMARC y DNSSEC contra spoofing). | Calificación de seguridad de correo electrónico (HARDENED / VULNERABLE) y alertas de suplantación. |
+| <img src="assets/logos/subnetsweep.png" width="52"><br>**`trafficsentry`** | Host & Sockets | Auditoría de conexiones activas del sistema operativo y detección de daemons o servicios sensibles expuestos a 0.0.0.0 (todas las interfaces) en lugar de localhost. | Tabla en vivo de sockets y puertos con alertas perimetrales de exposición. |
 
 ---
 
@@ -209,6 +210,21 @@ from sentry.tools.whoissentry import WhoisSentryTool
 3. ¡La herramienta queda registrada automáticamente en `python sentry.py --list` y en la ayuda general!
 
 Para más información, consulta la [Guía de Contribución](CONTRIBUTING.md).
+
+---
+
+## 🐳 Despliegue Portable con Docker
+
+Si prefieres ejecutar auditorías perimetrales dentro de un contenedor aislado (< 60MB):
+
+```bash
+# Construir la imagen local:
+docker build -t hfs-sentry .
+
+# Ejecutar cualquier escaneo perimetral:
+docker run -it --rm hfs-sentry netsentry scanme.nmap.org
+docker run -it --rm hfs-sentry dnsprobe google.com
+```
 
 ---
 

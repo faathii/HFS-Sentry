@@ -6,6 +6,7 @@ from sentry.ui.windows.certsentry_window import CertSentryWindow
 from sentry.ui.windows.subnetsweep_window import SubnetSweepWindow
 from sentry.ui.windows.integrityguard_window import IntegrityGuardWindow
 from sentry.ui.windows.dnsprobe_window import DnsProbeWindow
+from sentry.ui.windows.trafficsentry_window import TrafficSentryWindow
 
 TOOL_WINDOW_MAP = {
     "netsentry": NetSentryWindow,
@@ -14,6 +15,7 @@ TOOL_WINDOW_MAP = {
     "subnetsweep": SubnetSweepWindow,
     "integrityguard": IntegrityGuardWindow,
     "dnsprobe": DnsProbeWindow,
+    "trafficsentry": TrafficSentryWindow,
 }
 
 __all__ = [
@@ -23,6 +25,7 @@ __all__ = [
     "SubnetSweepWindow",
     "IntegrityGuardWindow",
     "DnsProbeWindow",
+    "TrafficSentryWindow",
     "TOOL_WINDOW_MAP",
 ]
 

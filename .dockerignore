@@ -1,0 +1,17 @@
+.git/
+.github/
+.vscode/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+assets/
+*.lnk
+*.ico
+*.bat
+*.vbs
+tests/

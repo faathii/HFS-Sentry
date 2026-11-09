@@ -9,11 +9,47 @@ import json
 from typing import Any, Dict, List, Optional
 
 
+def _render_svg_gauge(score: int, label: str = "SCORE") -> str:
+    """Generate inline native SVG circular progress gauge without external libraries."""
+    clamped_score = max(0, min(100, score))
+    # Circle perimeter for r=54 is 2 * pi * 54 = 339.29
+    perimeter = 339.29
+    dash_offset = perimeter * (1.0 - (clamped_score / 100.0))
+    stroke_color = "#00e676" if clamped_score >= 85 else ("#ffd600" if clamped_score >= 70 else "#ff5252")
+
+    return f"""
+    <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 24px;">
+        <svg width="160" height="160" viewBox="0 0 140 140">
+            <circle cx="70" cy="70" r="54" fill="none" stroke="#1c2f4c" stroke-width="12" />
+            <circle cx="70" cy="70" r="54" fill="none" stroke="{stroke_color}" stroke-width="12"
+                    stroke-dasharray="{perimeter}" stroke-dashoffset="{dash_offset}"
+                    stroke-linecap="round" transform="rotate(-90 70 70)"
+                    style="transition: stroke-dashoffset 1s ease-in-out;" />
+            <text x="70" y="65" text-anchor="middle" fill="#ffffff" font-size="28" font-weight="bold" font-family="-apple-system, sans-serif">{clamped_score}</text>
+            <text x="70" y="86" text-anchor="middle" fill="{stroke_color}" font-size="12" font-weight="bold" letter-spacing="1" font-family="-apple-system, sans-serif">{label}</text>
+        </svg>
+    </div>
+    """
+
+
 def generate_html_report(data: Dict[str, Any], title: Optional[str] = None) -> str:
     """Generate self-contained HTML audit report from analysis dictionary."""
     tool_name = data.get("tool", "HFS-Sentry Diagnostic")
     report_title = title or f"{tool_name} — Executive Security Audit Report"
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    # SVG Gauge if score or grade present
+    gauge_html = ""
+    if "security_score" in data:
+        score_val = data["security_score"]
+        label_val = data.get("grade", "SCORE")
+        gauge_html = _render_svg_gauge(score_val, label=f"GRADO {label_val}")
+    elif "score_fraction" in data:
+        # e.g. "5/6"
+        parts = str(data["score_fraction"]).split("/")
+        if len(parts) == 2 and parts[1].isdigit():
+            frac_score = int(int(parts[0]) / int(parts[1]) * 100)
+            gauge_html = _render_svg_gauge(frac_score, label=f"OWASP {data.get('grade', '')}")
 
     # Render key-value metadata rows
     meta_rows = []
@@ -220,6 +256,8 @@ def generate_html_report(data: Dict[str, Any], title: Optional[str] = None) -> s
         </div>
         <div class="badge">AUDITADO POR HFS-SENTRY</div>
     </div>
+
+    {gauge_html}
 
     <div class="meta-grid">
         {''.join(meta_rows)}

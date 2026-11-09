@@ -28,7 +28,7 @@ class TestDesktopUI(unittest.TestCase):
                 pass
 
     def test_tool_window_mappings(self):
-        expected_tools = ["netsentry", "logsentinel", "certsentry", "subnetsweep", "integrityguard", "dnsprobe"]
+        expected_tools = ["netsentry", "logsentinel", "certsentry", "subnetsweep", "integrityguard", "dnsprobe", "trafficsentry"]
         for tool_id in expected_tools:
             self.assertIn(tool_id, TOOL_WINDOW_MAP)
             win_cls = TOOL_WINDOW_MAP[tool_id]
