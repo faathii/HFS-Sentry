@@ -1,4 +1,8 @@
 @echo off
 cd /d "%~dp0"
-start "" pythonw sentry.py
+if exist "dist\HFS-Sentry.exe" (
+    start "" "dist\HFS-Sentry.exe"
+) else (
+    start "" pythonw sentry.py
+)
 

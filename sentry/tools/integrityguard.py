@@ -126,6 +126,7 @@ def verify_integrity(baseline_source: Any) -> Dict[str, Any]:
 
     modified: List[Dict[str, Any]] = []
     deleted: List[str] = []
+    unreadable: List[str] = []
     intact_count = 0
 
     for path, original in baseline_files.items():
@@ -135,7 +136,7 @@ def verify_integrity(baseline_source: Any) -> Dict[str, Any]:
 
         current = collect_file_metadata(path)
         if not current:
-            deleted.append(path)
+            unreadable.append(path)
             continue
 
         if current["sha256"] != original["sha256"]:
@@ -160,6 +161,7 @@ def verify_integrity(baseline_source: Any) -> Dict[str, Any]:
         "tampered": is_compromised,
         "modified": modified,
         "deleted": deleted,
+        "unreadable": unreadable,
     }
 
 
@@ -258,6 +260,11 @@ def print_cli_report(results: Dict[str, Any], baseline_file: str) -> None:
             print(f"\n  {yellow(bold('--- DELETED / MISSING FILES ---'))}")
             for d in results["deleted"]:
                 print(f"  [MISSING] {yellow(d)}")
+
+        if results.get("unreadable"):
+            print(f"\n  {yellow(bold('--- UNREADABLE / LOCKED FILES ---'))}")
+            for u in results["unreadable"]:
+                print(f"  [LOCKED / PERMISSION DENIED] {yellow(u)}")
 
     print("\n" + "=" * 76 + "\n")
 

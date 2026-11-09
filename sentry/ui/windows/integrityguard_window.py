@@ -268,6 +268,15 @@ class IntegrityGuardWindow(BaseToolWindow):
                 tags=("status_deleted",)
             )
 
+        for u in res.get("unreadable", []):
+            if query and query not in u.lower() and query not in "bloqueado" and query not in "permiso":
+                continue
+            self.tree.insert(
+                "", "end",
+                values=(u, "🔒 BLOQUEADO (PERMISOS)", "-", "-", "-"),
+                tags=("status_deleted",)
+            )
+
         if not res.get("tampered"):
             if not query or query in "integro" or query in "sha-256":
                 self.tree.insert(
