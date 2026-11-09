@@ -197,7 +197,7 @@ Este proyecto sigue las mejores prácticas de la comunidad Open Source:
 
 ## 👤 Autor
 
-* **Hamza El Fathi Sofyani**
+* **faathii**
   * Certificado en Ciberseguridad por Cisco Networking Academy
   * Grado en Ingeniería Informática (UNED)
   * GitHub: [@faathii](https://github.com/faathii)
