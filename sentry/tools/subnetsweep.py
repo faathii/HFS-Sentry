@@ -73,7 +73,8 @@ def get_local_arp_table() -> Dict[str, str]:
     """Parse system ARP cache (cross-platform: Windows, Linux, macOS)."""
     arp_cache: Dict[str, str] = {}
     try:
-        output = subprocess.check_output(["arp", "-a"], text=True, stderr=subprocess.DEVNULL)
+        raw_output = subprocess.check_output(["arp", "-a"], stderr=subprocess.DEVNULL)
+        output = raw_output.decode(sys.getfilesystemencoding(), errors="replace")
         # Windows pattern: 192.168.1.1       00-11-22-33-44-55     dynamic
         # Linux pattern:   ? (192.168.1.1) at 00:11:22:33:44:55 [ether] on eth0
         pattern = re.compile(
@@ -181,7 +182,10 @@ def _is_stopped(stop_check: Optional[Any]) -> bool:
 
 def sweep_subnet(cidr: str, workers: int = 40, use_icmp: bool = True, stop_check: Optional[Any] = None) -> List[Dict[str, Any]]:
     """Perform concurrent asset discovery across a CIDR subnet."""
-    if "/" not in cidr and cidr.count(".") == 3 and cidr.endswith(".0"):
+    cidr = cidr.strip()
+    if "/" not in cidr and cidr.count(".") == 2:
+        cidr = f"{cidr}.0/24"
+    elif "/" not in cidr and cidr.count(".") == 3 and cidr.endswith(".0"):
         cidr = f"{cidr}/24"
     network = ipaddress.ip_network(cidr, strict=False)
     if network.num_addresses > 65536:
@@ -202,6 +206,8 @@ def sweep_subnet(cidr: str, workers: int = 40, use_icmp: bool = True, stop_check
 
         for future in as_completed(future_to_ip):
             if _is_stopped(stop_check):
+                for f in future_to_ip:
+                    f.cancel()
                 break
             res = future.result()
             if res:

@@ -113,7 +113,9 @@ class IntegrityGuardWindow(BaseToolWindow):
 
         self.tree.tag_configure("status_intact", foreground=COLORS["accent_green"])
         self.tree.tag_configure("status_modified", foreground=COLORS["accent_red"])
+        self.tree.tag_configure("status_new", foreground=COLORS["accent_red"])
         self.tree.tag_configure("status_deleted", foreground=COLORS["accent_yellow"])
+        self.tree.tag_configure("status_locked", foreground=COLORS["text_secondary"])
 
         scroll = ttk.Scrollbar(parent, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scroll.set)
@@ -259,6 +261,15 @@ class IntegrityGuardWindow(BaseToolWindow):
                 tags=("status_modified",)
             )
 
+        for nf in res.get("new_files", []):
+            if query and query not in nf.lower() and query not in "nuevo":
+                continue
+            self.tree.insert(
+                "", "end",
+                values=(nf, "🚨 NUEVO ARCHIVO NO AUTORIZADO", "-", "-", "-"),
+                tags=("status_new",)
+            )
+
         for d in res.get("deleted", []):
             if query and query not in d.lower() and query not in "eliminado":
                 continue
@@ -274,7 +285,7 @@ class IntegrityGuardWindow(BaseToolWindow):
             self.tree.insert(
                 "", "end",
                 values=(u, "🔒 BLOQUEADO (PERMISOS)", "-", "-", "-"),
-                tags=("status_deleted",)
+                tags=("status_locked",)
             )
 
         if not res.get("tampered"):

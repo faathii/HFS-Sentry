@@ -13,7 +13,7 @@ from sentry.tools.logsentinel import (
     watch_log_timeline,
 )
 from sentry.ui.base_window import BaseToolWindow
-from sentry.ui.theme import COLORS, FONTS
+from sentry.ui.theme import COLORS, FONTS, resolve_resource_path
 
 
 class LogSentinelWindow(BaseToolWindow):
@@ -36,7 +36,7 @@ class LogSentinelWindow(BaseToolWindow):
 
         ttk.Label(row1, text="Archivo Log:", style="Card.TLabel").pack(side="left", padx=(0, 6))
         self.entry_file = ttk.Entry(row1, width=28)
-        default_log = os.path.join("examples", "sample_auth.log")
+        default_log = resolve_resource_path(os.path.join("examples", "sample_auth.log"))
         if os.path.isfile(default_log):
             self.entry_file.insert(0, default_log)
         self.entry_file.pack(side="left", padx=(0, 6))
@@ -127,7 +127,7 @@ class LogSentinelWindow(BaseToolWindow):
             self.entry_file.insert(0, path)
 
     def _load_sample_access(self) -> None:
-        path = os.path.join("examples", "sample_access.log")
+        path = resolve_resource_path(os.path.join("examples", "sample_access.log"))
         if os.path.isfile(path):
             self.entry_file.delete(0, "end")
             self.entry_file.insert(0, path)

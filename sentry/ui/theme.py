@@ -1,9 +1,10 @@
 """Design system, color palette and ttk styles for HFS-Sentry Desktop Suite."""
 
 import os
+import sys
 import tkinter as tk
 from tkinter import ttk
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 from PIL import Image, ImageTk
 
 # Cyber-Security Pro Dark Palette

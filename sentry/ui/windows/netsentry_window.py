@@ -192,7 +192,7 @@ class NetSentryWindow(BaseToolWindow):
                         stop_check=self.stop_requested,
                     )
                 else:
-                    open_ports = scan_ports(ip, ports, timeout=0.5, workers=20)
+                    open_ports = scan_ports(ip, ports, timeout=0.5, workers=20, stop_check=self.stop_requested)
                     for p in open_ports:
                         p["status"] = "ESTABLE"
                         p["stability_percent"] = 100.0
@@ -282,11 +282,12 @@ class NetSentryWindow(BaseToolWindow):
             stab_str = f"{p.get('stability_percent', 100.0)}% ({status})"
             lat_str = f"{p.get('latency_ms', 0.0)} ms"
 
+            state_display = "ABIERTO" if p.get("state") != "CLOSED" else "CERRADO"
             self.tree.insert(
                 "", "end",
                 values=(
                     port_num,
-                    "ABIERTO",
+                    state_display,
                     stab_str,
                     lat_str,
                     service,

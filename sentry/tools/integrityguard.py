@@ -100,6 +100,7 @@ def generate_baseline(targets: List[str], baseline_file: str) -> Dict[str, Any]:
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "host": platform.node(),
         "os": platform.system(),
+        "targets": targets,
         "total_files": len(records),
         "files": records,
     }
@@ -108,6 +109,9 @@ def generate_baseline(targets: List[str], baseline_file: str) -> Dict[str, Any]:
         json.dump(baseline_data, f, indent=2)
 
     return baseline_data
+
+
+create_baseline = generate_baseline
 
 
 def verify_integrity(baseline_source: Any) -> Dict[str, Any]:
@@ -152,7 +156,16 @@ def verify_integrity(baseline_source: Any) -> Dict[str, Any]:
         else:
             intact_count += 1
 
-    is_compromised = bool(modified or deleted)
+    new_files: List[str] = []
+    targets = baseline.get("targets", [])
+    if targets:
+        try:
+            current_discovered = set(expand_paths(targets))
+            new_files = sorted(list(current_discovered - set(baseline_files.keys())))
+        except Exception:
+            pass
+
+    is_compromised = bool(modified or deleted or new_files)
 
     return {
         "baseline_created": baseline.get("generated_at"),
@@ -162,6 +175,7 @@ def verify_integrity(baseline_source: Any) -> Dict[str, Any]:
         "modified": modified,
         "deleted": deleted,
         "unreadable": unreadable,
+        "new_files": new_files,
     }
 
 
@@ -198,6 +212,7 @@ def watch_integrity_timeline(
 
     baseline = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "targets": targets,
         "files": initial_records,
     }
 
@@ -213,6 +228,13 @@ def watch_integrity_timeline(
 
         current_verif = verify_integrity(baseline)
         current_verif["duration_seconds"] = round(now - start_time, 1)
+
+        # Detect newly added files in monitored target directories
+        current_files = set(expand_paths(targets))
+        new_files = sorted(list(current_files - set(initial_records.keys())))
+        if new_files:
+            current_verif["new_files"] = new_files
+            current_verif["tampered"] = True
 
         if progress_callback:
             progress_callback(current_verif, remaining)

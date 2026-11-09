@@ -35,8 +35,21 @@ RECORD_TYPES = {
 }
 
 
+def _clean_domain_name(domain: str) -> str:
+    """Normalize input domain, stripping schemes, paths, and port numbers."""
+    domain = domain.strip().lower()
+    if "://" in domain:
+        domain = domain.split("://", 1)[1]
+    if "/" in domain:
+        domain = domain.split("/", 1)[0]
+    if ":" in domain:
+        domain = domain.split(":", 1)[0]
+    return domain.strip()
+
+
 def query_doh(domain: str, record_type: str = "A", timeout: float = 3.0) -> Optional[Dict[str, Any]]:
     """Query DNS-over-HTTPS endpoint using standard library urllib."""
+    domain = _clean_domain_name(domain)
     headers = {
         "Accept": "application/dns-json",
         "User-Agent": "HFS-Sentry/1.0 (DnsProbe Auditor)",
@@ -136,8 +149,7 @@ def audit_email_security(domain: str, timeout: float = 3.0) -> Dict[str, Any]:
 
 def run_dnsprobe(domain: str, timeout: float = 3.0) -> Dict[str, Any]:
     """Execute complete DNS and email security audit."""
-    # Strip protocol or paths if provided by mistake
-    clean_domain = domain.lower().replace("https://", "").replace("http://", "").split("/")[0].strip()
+    clean_domain = _clean_domain_name(domain)
 
     records_collected: Dict[str, List[str]] = {}
     dnssec_validated = False

@@ -6,7 +6,7 @@ import sys
 from typing import List, Optional
 
 from sentry import __version__
-from sentry.core.colors import bold, cyan, green, yellow, dim
+from sentry.core.colors import bold, cyan, dim, green, red, yellow
 from sentry.core.registry import get_tool_registry, list_tools
 
 

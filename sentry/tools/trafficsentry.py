@@ -96,7 +96,8 @@ def audit_active_sockets(listening_only: bool = False) -> List[Dict[str, Any]]:
         if system == "windows":
             # Windows netstat -ano
             cmd = ["netstat", "-ano"]
-            output = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+            raw_output = subprocess.check_output(cmd, stderr=subprocess.DEVNULL)
+            output = raw_output.decode(sys.getfilesystemencoding(), errors="replace")
             for raw_line in output.splitlines():
                 line = raw_line.strip()
                 if not line or not line.startswith(("TCP", "UDP")):
@@ -154,9 +155,10 @@ def audit_active_sockets(listening_only: bool = False) -> List[Dict[str, Any]]:
             # Linux / macOS: try ss or netstat
             cmd = ["ss", "-tulnp"] if system == "linux" else ["netstat", "-an"]
             try:
-                output = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+                raw_output = subprocess.check_output(cmd, stderr=subprocess.DEVNULL)
             except Exception:
-                output = subprocess.check_output(["netstat", "-an"], text=True, stderr=subprocess.DEVNULL)
+                raw_output = subprocess.check_output(["netstat", "-an"], stderr=subprocess.DEVNULL)
+            output = raw_output.decode(sys.getfilesystemencoding(), errors="replace")
 
             for line in output.splitlines():
                 line = line.strip()

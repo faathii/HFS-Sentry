@@ -140,15 +140,27 @@ def scan_single_port(host: str, port: int, timeout: float = 0.6) -> Optional[Dic
     return None
 
 
-def scan_ports(host: str, ports: List[int], workers: int = 20, timeout: float = 0.6) -> List[Dict[str, Any]]:
+def scan_ports(
+    host: str,
+    ports: List[int],
+    workers: int = 20,
+    timeout: float = 0.6,
+    stop_check: Optional[Any] = None,
+) -> List[Dict[str, Any]]:
     """Scan list of ports concurrently."""
     open_ports = []
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        future_to_port = {
-            executor.submit(scan_single_port, host, port, timeout): port
-            for port in ports
-        }
+        future_to_port = {}
+        for port in ports:
+            if _is_stopped(stop_check):
+                break
+            future_to_port[executor.submit(scan_single_port, host, port, timeout)] = port
+
         for future in as_completed(future_to_port):
+            if _is_stopped(stop_check):
+                for f in future_to_port:
+                    f.cancel()
+                break
             res = future.result()
             if res:
                 open_ports.append(res)
@@ -191,7 +203,7 @@ def scan_ports_timeline(
         if _is_stopped(stop_check):
             break
 
-        current_open = {p["port"]: p for p in scan_ports(host, ports, timeout=timeout, workers=workers)}
+        current_open = {p["port"]: p for p in scan_ports(host, ports, timeout=timeout, workers=workers, stop_check=stop_check)}
         now_iso = datetime.datetime.now().strftime("%H:%M:%S")
 
         for port in ports:
@@ -216,12 +228,15 @@ def scan_ports_timeline(
                 entry["checks_total"] += 1
                 if is_open and current_data:
                     entry["checks_success"] += 1
+                    entry["state"] = "OPEN"
                     entry["last_seen"] = now_iso
                     lat = current_data.get("latency_ms", 0.0)
                     entry["latencies"].append(lat)
                     entry["latency_ms"] = lat
                     if current_data.get("banner"):
                         entry["banner"] = current_data["banner"]
+                else:
+                    entry["state"] = "CLOSED"
 
                 entry["stability_percent"] = round((entry["checks_success"] / entry["checks_total"]) * 100.0, 1)
                 if entry["stability_percent"] >= 90.0:

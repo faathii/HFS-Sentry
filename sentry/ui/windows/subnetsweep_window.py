@@ -1,5 +1,6 @@
 """Independent Desktop Window for SubnetSweep with responsive layout and live stopwatch."""
 
+import ipaddress
 import socket
 import time
 import tkinter as tk
@@ -137,8 +138,11 @@ class SubnetSweepWindow(BaseToolWindow):
             messagebox.showerror("Dato Requerido", "Por favor ingrese una subred en notación CIDR.")
             return
 
-        import ipaddress
-        if "/" not in cidr and cidr.count(".") == 3 and cidr.endswith(".0"):
+        if "/" not in cidr and cidr.count(".") == 2:
+            cidr = f"{cidr}.0/24"
+            self.entry_cidr.delete(0, "end")
+            self.entry_cidr.insert(0, cidr)
+        elif "/" not in cidr and cidr.count(".") == 3 and cidr.endswith(".0"):
             cidr = f"{cidr}/24"
             self.entry_cidr.delete(0, "end")
             self.entry_cidr.insert(0, cidr)

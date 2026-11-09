@@ -213,6 +213,76 @@ class TestFullSuiteIntegrity(unittest.TestCase):
         play_audio_cue("critical")
         play_audio_cue("warning")
 
+    def test_theme_resolve_resource_path_safety(self):
+        """resolve_resource_path must safely handle missing files and PyInstaller MEIPASS."""
+        from sentry.ui.theme import resolve_resource_path
+        # Non-existent file should return relative_path without NameError: sys
+        path = resolve_resource_path("non_existent_resource_test.xyz")
+        self.assertEqual(path, "non_existent_resource_test.xyz")
+
+    def test_trafficsentry_spanish_locale_decoding(self):
+        """TrafficSentry must decode localized netstat output with non-ASCII OEM characters."""
+        from sentry.tools.trafficsentry import audit_active_sockets
+        # Mock netstat -ano output with Spanish OEM byte 0xa2 (ó)
+        raw_spanish_netstat = (
+            b"\r\nConexiones activas\r\n\r\n"
+            b"  Proto  Direcci\xa2n local          Direcci\xa2n remota        Estado           PID\r\n"
+            b"  TCP    127.0.0.1:8080         0.0.0.0:0              LISTENING       1234\r\n"
+            b"  TCP    192.168.0.10:49152     199.232.33.175:443     ESTABLISHED     5678\r\n"
+        )
+        with patch("platform.system", return_value="Windows"):
+            with patch("subprocess.check_output", return_value=raw_spanish_netstat):
+                sockets = audit_active_sockets(listening_only=False)
+                self.assertGreaterEqual(len(sockets), 2)
+                ports = {s["local_port"] for s in sockets}
+                self.assertIn(8080, ports)
+                self.assertIn(49152, ports)
+
+    def test_subnetsweep_cidr_normalization(self):
+        """SubnetSweep must normalize abbreviations like 192.168.1 and 192.168.1.0 into /24."""
+        from sentry.tools.subnetsweep import sweep_subnet
+        with patch("sentry.tools.subnetsweep.scan_single_host", return_value=None):
+            # 192.168.1 (2 dots, no slash)
+            res1 = sweep_subnet("192.168.1")
+            self.assertEqual(res1, [])
+            # 192.168.1.0 (3 dots, no slash)
+            res2 = sweep_subnet("192.168.1.0")
+            self.assertEqual(res2, [])
+
+    def test_dnsprobe_input_sanitization(self):
+        """DnsProbe domain cleaning must strip protocols, ports, and subpaths."""
+        from sentry.tools.dnsprobe import _clean_domain_name
+        self.assertEqual(_clean_domain_name("https://github.com/"), "github.com")
+        self.assertEqual(_clean_domain_name("http://api.cloudflare.com:8080/v1"), "api.cloudflare.com")
+        self.assertEqual(_clean_domain_name("EXAMPLE.COM:443"), "example.com")
+
+    def test_integrityguard_new_files_detection(self):
+        """watch_integrity_timeline and verify_integrity must detect newly added files in monitored target folders."""
+        from sentry.tools.integrityguard import create_baseline, verify_integrity
+        with tempfile.TemporaryDirectory() as tmpdir:
+            file1 = os.path.join(tmpdir, "initial.txt")
+            with open(file1, "w") as f:
+                f.write("initial content")
+
+            baseline_file = os.path.join(tmpdir, "baseline.json")
+            create_baseline([tmpdir], baseline_file=baseline_file)
+
+            # Attacker drops unauthorized file in monitored tmpdir
+            file2 = os.path.join(tmpdir, "backdoor.php")
+            with open(file2, "w") as f:
+                f.write("malicious payload")
+
+            res = verify_integrity(baseline_file)
+            self.assertTrue(res.get("tampered"))
+            self.assertIn("new_files", res)
+            self.assertIn(os.path.abspath(file2), [os.path.abspath(p) for p in res["new_files"]])
+
+    def test_cli_color_imports(self):
+        """All terminal color helpers must be exported in CLI without missing symbols."""
+        import sentry.cli as cli
+        for color_name in ("bold", "cyan", "dim", "green", "red", "yellow"):
+            self.assertTrue(hasattr(cli, color_name), f"Missing {color_name} in sentry.cli")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,6 +19,17 @@ from sentry.core.registry import register_tool
 
 def inspect_certificate(host: str, port: int = 443, timeout: float = 3.0) -> Dict[str, Any]:
     """Retrieve and parse SSL/TLS certificate details using pure standard library ssl."""
+    host = host.strip()
+    if "://" in host:
+        host = host.split("://", 1)[1]
+    if "/" in host:
+        host = host.split("/", 1)[0]
+    if ":" in host and not host.startswith("["):
+        host_part, p_str = host.rsplit(":", 1)
+        if p_str.isdigit():
+            host = host_part
+            port = int(p_str)
+
     context = ssl.create_default_context()
     # Allow fetching cert even if expired/self-signed for forensic audit
     context.check_hostname = False

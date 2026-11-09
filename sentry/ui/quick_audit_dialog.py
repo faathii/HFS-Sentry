@@ -169,8 +169,8 @@ class QuickAuditDialog(tk.Toplevel):
         for c in data.get("checks", []):
             st = c["status"]
             tag = "pass" if st == "PASS" else ("warn" if st in ("WARN", "NOTICE") else "fail")
-            st_text = "[PASÓ]" if st == "PASS" else ("[AVISO]" if st == "WARN" else "[FALLÓ]")
-            self.tree.insert("", "end", values=(st_text, c["name"], f"{c['score']}/25", c["details"]), tags=(tag,))
+            st_text = "[PASÓ]" if st == "PASS" else ("[AVISO]" if st in ("WARN", "NOTICE") else "[FALLÓ]")
+            self.tree.insert("", "end", values=(st_text, c["name"], f"{c['score']} pts", c["details"]), tags=(tag,))
 
     def export_html(self) -> None:
         if not self.latest_data:

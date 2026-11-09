@@ -23,7 +23,7 @@ class MockSampleTool(BaseTool):
 class TestRegistry(unittest.TestCase):
 
     def test_core_tools_registered(self):
-        # Ensure all 5 official tools are registered
+        # Ensure all 7 official tools are registered
         reg = get_tool_registry()
         expected = ["netsentry", "logsentinel", "certsentry", "subnetsweep", "integrityguard", "dnsprobe", "trafficsentry"]
         for tool_name in expected:
