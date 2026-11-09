@@ -176,7 +176,14 @@ def _is_stopped(stop_check: Optional[Any]) -> bool:
 
 def sweep_subnet(cidr: str, workers: int = 40, use_icmp: bool = True, stop_check: Optional[Any] = None) -> List[Dict[str, Any]]:
     """Perform concurrent asset discovery across a CIDR subnet."""
+    if "/" not in cidr and cidr.count(".") == 3 and cidr.endswith(".0"):
+        cidr = f"{cidr}/24"
     network = ipaddress.ip_network(cidr, strict=False)
+    if network.num_addresses > 65536:
+        raise ValueError(
+            f"Subred demasiado amplia ({network.num_addresses:,} hosts). "
+            f"El rango máximo recomendado para barrido en vivo es /16 (65,536 hosts)."
+        )
     ip_list = [str(ip) for ip in network.hosts()]
 
     active_hosts: List[Dict[str, Any]] = []

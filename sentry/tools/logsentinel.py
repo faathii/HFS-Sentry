@@ -261,7 +261,8 @@ def watch_log_timeline(
             for pat in SSH_FAILED_PATTERNS:
                 m = pat.search(line)
                 if m:
-                    ip = m.group(m.lastindex)
+                    groups = m.groups()
+                    ip = groups[1] if len(groups) > 1 and "." in groups[1] else groups[0]
                     collector.record_ssh_failure(ip)
                     matched_ssh = True
                     break
@@ -306,7 +307,8 @@ def watch_log_timeline(
                     for pat in SSH_FAILED_PATTERNS:
                         m = pat.search(line)
                         if m:
-                            ip = m.group(m.lastindex)
+                            groups = m.groups()
+                            ip = groups[1] if len(groups) > 1 and "." in groups[1] else groups[0]
                             collector.record_ssh_failure(ip)
                             matched_ssh = True
                             break
@@ -441,25 +443,29 @@ class LogSentinelTool(BaseTool):
         parser.add_argument("--json", action="store_true", help="Output results in JSON format")
 
     def run(self, args: argparse.Namespace) -> int:
-        collector = analyze_log_file(args.log_file)
-        threats = evaluate_threats(collector, ssh_threshold=args.threshold)
+        try:
+            collector = analyze_log_file(args.log_file)
+            threats = evaluate_threats(collector, ssh_threshold=args.threshold)
 
-        script_path = None
-        if threats and not args.no_script:
-            script_path = generate_block_script(threats, output_file=args.output_script)
+            script_path = None
+            if threats and not args.no_script:
+                script_path = generate_block_script(threats, output_file=args.output_script)
 
-        if args.json:
-            result = {
-                "tool": "LogSentinel",
-                "log_file": args.log_file,
-                "threat_count": len(threats),
-                "threats": threats,
-                "block_script": script_path,
-            }
-            print(json.dumps(result, indent=2))
-        else:
-            print_cli_report(threats, args.log_file, script_path)
-        return 0
+            if args.json:
+                result = {
+                    "tool": "LogSentinel",
+                    "log_file": args.log_file,
+                    "threat_count": len(threats),
+                    "threats": threats,
+                    "block_script": script_path,
+                }
+                print(json.dumps(result, indent=2))
+            else:
+                print_cli_report(threats, args.log_file, script_path)
+            return 0
+        except Exception as e:
+            print(f"[!] LogSentinel error: {e}", file=sys.stderr)
+            return 1
 
 
 if __name__ == "__main__":

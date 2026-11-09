@@ -422,13 +422,19 @@ class NetSentryTool(BaseTool):
         port_list = None
         if args.ports:
             port_list = []
-            for part in args.ports.split(","):
-                part = part.strip()
-                if "-" in part:
-                    s, e = map(int, part.split("-"))
-                    port_list.extend(range(s, e + 1))
-                else:
-                    port_list.append(int(part))
+            try:
+                for part in args.ports.split(","):
+                    part = part.strip()
+                    if not part:
+                        continue
+                    if "-" in part:
+                        s, e = map(int, part.split("-"))
+                        port_list.extend(range(s, e + 1))
+                    else:
+                        port_list.append(int(part))
+            except ValueError:
+                print(f"[!] Error: Formato de puertos inválido: '{args.ports}'", file=sys.stderr)
+                return 1
 
         report = run_netsentry(
             target=args.target,

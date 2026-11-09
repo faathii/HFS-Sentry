@@ -296,19 +296,20 @@ def audit_sockets_timeline(
 def _evaluate_socket_risk(proto: str, addr: str, port: int, state: str) -> tuple:
     """Evaluate if socket exposure represents a security vulnerability."""
     is_listening = "LISTEN" in state.upper() or proto == "UDP"
-    is_public = addr in ("0.0.0.0", "::", "*")
+    clean_addr = addr.strip("[]").strip()
+    is_public = clean_addr in ("0.0.0.0", "::", "*")
 
     if is_listening and is_public:
         if port in (21, 23, 6379, 27017):
-            return "CRITICAL", f"¡Peligro! {SENSITIVE_SERVICES.get(port)} expuesto públicamente a 0.0.0.0 sin cifrado"
+            return "CRITICAL", f"¡Peligro! {SENSITIVE_SERVICES.get(port)} expuesto públicamente a todas las interfaces sin cifrado"
         elif port in (3306, 5432, 1433):
             return "HIGH", f"Base de datos {SENSITIVE_SERVICES.get(port)} expuesta en todas las interfaces de red"
         elif port in (22, 3389):
-            return "MEDIUM", f"Servicio de administración {SENSITIVE_SERVICES.get(port)} expuesto en 0.0.0.0"
+            return "MEDIUM", f"Servicio de administración {SENSITIVE_SERVICES.get(port)} expuesto públicamente"
         elif port in SENSITIVE_SERVICES:
-            return "LOW", f"Servicio {SENSITIVE_SERVICES.get(port)} escuchando en 0.0.0.0"
+            return "LOW", f"Servicio {SENSITIVE_SERVICES.get(port)} escuchando en todas las interfaces"
 
-    if addr in ("127.0.0.1", "::1", "localhost"):
+    if clean_addr in ("127.0.0.1", "::1", "localhost"):
         return "CLEAN", "Seguro — Sockets enlazados exclusivamente a Localhost"
 
     return "LOW", "Conexión activa estándar"
@@ -358,23 +359,27 @@ class TrafficSentryTool(BaseTool):
         parser.add_argument("--json", action="store_true", help="Output results in JSON format")
 
     def run(self, args: argparse.Namespace) -> int:
-        if args.duration > 0:
-            print(f"[*] Iniciando ventana de observación de {args.duration}s (muestreo acumulativo cada 1s)...")
-            sockets = audit_sockets_timeline(duration=args.duration, listening_only=args.listening_only)
-        else:
-            sockets = audit_active_sockets(listening_only=args.listening_only)
+        try:
+            if args.duration > 0:
+                print(f"[*] Iniciando ventana de observación de {args.duration}s (muestreo acumulativo cada 1s)...")
+                sockets = audit_sockets_timeline(duration=args.duration, listening_only=args.listening_only)
+            else:
+                sockets = audit_active_sockets(listening_only=args.listening_only)
 
-        if args.json:
-            result = {
-                "tool": "TrafficSentry",
-                "duration_seconds": args.duration,
-                "total_sockets": len(sockets),
-                "sockets": sockets,
-            }
-            print(json.dumps(result, indent=2))
-        else:
-            print_cli_report(sockets, listening_only=args.listening_only)
-        return 0
+            if args.json:
+                result = {
+                    "tool": "TrafficSentry",
+                    "duration_seconds": args.duration,
+                    "total_sockets": len(sockets),
+                    "sockets": sockets,
+                }
+                print(json.dumps(result, indent=2))
+            else:
+                print_cli_report(sockets, listening_only=args.listening_only)
+            return 0
+        except Exception as e:
+            print(f"[!] TrafficSentry error: {e}", file=sys.stderr)
+            return 1
 
 
 if __name__ == "__main__":

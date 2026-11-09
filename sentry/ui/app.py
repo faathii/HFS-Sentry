@@ -92,12 +92,16 @@ class SentrySuiteApp(tk.Tk):
         hero.pack(fill="x", padx=16, pady=(14, 10))
 
         # Main horizontal logo
-        logo_path = os.path.join("assets", "logos", "hfs_sentry_main.png")
-        self.main_logo_photo = load_icon(logo_path, size=(280, 127))
-        if self.main_logo_photo:
-            logo_lbl = ttk.Label(hero, image=self.main_logo_photo, style="Card.TLabel")
-            logo_lbl.pack(side="left", padx=(0, 20))
-        else:
+        try:
+            logo_path = os.path.join("assets", "logos", "hfs_sentry_main.png")
+            self.main_logo_photo = load_icon(logo_path, size=(280, 127), master=self)
+            if self.main_logo_photo:
+                logo_lbl = ttk.Label(hero, image=self.main_logo_photo, style="Card.TLabel")
+                logo_lbl.pack(side="left", padx=(0, 20))
+        except Exception:
+            self.main_logo_photo = None
+
+        if not getattr(self, "main_logo_photo", None):
             title_block = ttk.Frame(hero, style="Card.TFrame")
             title_block.pack(side="left")
             ttk.Label(title_block, text="HFS-Sentry", font=FONTS["title_large"], foreground=COLORS["accent_cyan"], style="Card.TLabel").pack(anchor="w")
@@ -228,11 +232,14 @@ class SentrySuiteApp(tk.Tk):
         top_row.pack(fill="x", pady=(0, 6))
 
         icon_path = os.path.join("assets", "logos", info["icon"])
-        tool_icon = load_icon(icon_path, size=(48, 48))
+        tool_icon = load_icon(icon_path, size=(48, 48), master=self)
         if tool_icon:
-            icon_lbl = ttk.Label(top_row, image=tool_icon, style="Card.TLabel")
-            icon_lbl.image = tool_icon
-            icon_lbl.pack(side="left", padx=(0, 12))
+            try:
+                icon_lbl = ttk.Label(top_row, image=tool_icon, style="Card.TLabel")
+                icon_lbl.image = tool_icon
+                icon_lbl.pack(side="left", padx=(0, 12))
+            except Exception:
+                pass
 
         title_box = ttk.Frame(top_row, style="Card.TFrame")
         title_box.pack(side="left", fill="y")

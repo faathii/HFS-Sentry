@@ -1,6 +1,7 @@
 """Main Command Line Interface for HFS-Sentry."""
 
 import argparse
+import os
 import sys
 from typing import List, Optional
 

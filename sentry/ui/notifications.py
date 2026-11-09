@@ -102,7 +102,11 @@ def notify_user(title: str, message: str, level: str = "info", duration_ms: int 
             except Exception:
                 pass
 
-        _create_toast()
+        root = getattr(tk, "_default_root", None)
+        if root and hasattr(root, "after"):
+            root.after(0, _create_toast)
+        else:
+            _create_toast()
     except Exception:
         pass
 

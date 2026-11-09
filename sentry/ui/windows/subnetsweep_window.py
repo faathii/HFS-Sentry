@@ -138,8 +138,19 @@ class SubnetSweepWindow(BaseToolWindow):
             return
 
         import ipaddress
+        if "/" not in cidr and cidr.count(".") == 3 and cidr.endswith(".0"):
+            cidr = f"{cidr}/24"
+            self.entry_cidr.delete(0, "end")
+            self.entry_cidr.insert(0, cidr)
+
         try:
-            ipaddress.ip_network(cidr, strict=False)
+            net = ipaddress.ip_network(cidr, strict=False)
+            if net.num_addresses > 65536:
+                messagebox.showerror(
+                    "Subred Demasiado Amplia",
+                    f"La red contiene {net.num_addresses:,} hosts. El límite máximo para escaneo seguro es /16 (65,536 hosts)."
+                )
+                return
         except Exception:
             messagebox.showerror("CIDR Inválido", f"'{cidr}' no es una subred válida (ejemplo: 192.168.1.0/24).")
             return

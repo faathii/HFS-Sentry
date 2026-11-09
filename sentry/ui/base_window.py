@@ -104,11 +104,14 @@ class BaseToolWindow(tk.Toplevel):
         header.pack(fill="x", padx=12, pady=(10, 6))
 
         # Icon
-        icon_path = os.path.join("assets", "logos", self.icon_filename)
-        self.banner_icon = load_icon(icon_path, size=(42, 42))
-        if self.banner_icon:
-            icon_lbl = ttk.Label(header, image=self.banner_icon, style="Card.TLabel")
-            icon_lbl.pack(side="left", padx=(0, 12))
+        try:
+            icon_path = os.path.join("assets", "logos", self.icon_filename)
+            self.banner_icon = load_icon(icon_path, size=(42, 42), master=self)
+            if self.banner_icon:
+                icon_lbl = ttk.Label(header, image=self.banner_icon, style="Card.TLabel")
+                icon_lbl.pack(side="left", padx=(0, 12))
+        except Exception:
+            self.banner_icon = None
 
         # Title block
         title_box = ttk.Frame(header, style="Card.TFrame")

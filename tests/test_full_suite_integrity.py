@@ -141,6 +141,78 @@ class TestFullSuiteIntegrity(unittest.TestCase):
 
         app.destroy()
 
+    def test_trafficsentry_ipv6_bracket_parsing(self):
+        """TrafficSentry must correctly identify public and localhost IPv6 addresses with brackets."""
+        from sentry.tools.trafficsentry import _evaluate_socket_risk
+
+        # Public exposed MySQL on all IPv6 interfaces with brackets
+        risk_mysql, desc_mysql = _evaluate_socket_risk("TCP", "[::]", 3306, "LISTENING")
+        self.assertEqual(risk_mysql, "HIGH")
+
+        # Public exposed Redis on all IPv4 interfaces
+        risk_redis, desc_redis = _evaluate_socket_risk("TCP", "0.0.0.0", 6379, "LISTENING")
+        self.assertEqual(risk_redis, "CRITICAL")
+
+        # Localhost IPv6 with brackets
+        risk_local6, desc_local6 = _evaluate_socket_risk("TCP", "[::1]", 8080, "LISTENING")
+        self.assertEqual(risk_local6, "CLEAN")
+
+        # Localhost IPv4
+        risk_local4, desc_local4 = _evaluate_socket_risk("TCP", "127.0.0.1", 8080, "LISTENING")
+        self.assertEqual(risk_local4, "CLEAN")
+
+    def test_subnetsweep_large_subnet_guard(self):
+        """SubnetSweep should reject /8 or /12 networks exceeding 65,536 hosts to prevent OOM."""
+        from sentry.tools.subnetsweep import sweep_subnet
+        with self.assertRaises(ValueError):
+            sweep_subnet("10.0.0.0/8")
+
+    def test_cli_parser_all_tools(self):
+        """CLI parser must parse valid arguments for all registered tools without failing."""
+        from sentry.cli import build_parser
+        parser = build_parser()
+
+        # NetSentry
+        args_ns = parser.parse_args(["netsentry", "127.0.0.1", "-p", "80,443"])
+        self.assertEqual(args_ns.target, "127.0.0.1")
+        self.assertEqual(args_ns.ports, "80,443")
+
+        # TrafficSentry
+        args_ts = parser.parse_args(["trafficsentry", "-l", "-d", "10.0"])
+        self.assertTrue(args_ts.listening_only)
+        self.assertEqual(args_ts.duration, 10.0)
+
+        # CertSentry
+        args_cs = parser.parse_args(["certsentry", "google.com", "-p", "443"])
+        self.assertEqual(args_cs.host, "google.com")
+        self.assertEqual(args_cs.port, 443)
+
+        # DnsProbe
+        args_dp = parser.parse_args(["dnsprobe", "github.com"])
+        self.assertEqual(args_dp.domain, "github.com")
+
+        # SubnetSweep
+        args_ss = parser.parse_args(["subnetsweep", "192.168.1.0/24"])
+        self.assertEqual(args_ss.cidr, "192.168.1.0/24")
+
+        # IntegrityGuard
+        args_ig = parser.parse_args(["integrityguard", "--check", "-b", "sentry_baseline.json"])
+        self.assertTrue(args_ig.check)
+
+        # LogSentinel
+        args_ls = parser.parse_args(["logsentinel", "sample.log", "--threshold", "3"])
+        self.assertEqual(args_ls.log_file, "sample.log")
+        self.assertEqual(args_ls.threshold, 3)
+
+    def test_notify_user_thread_safety(self):
+        """Notification engine must handle thread execution without raising exceptions."""
+        from sentry.ui.notifications import notify_user, play_audio_cue
+        # Should not raise exception even when headless or without Tkinter root
+        notify_user("Test Title", "Test Message", level="info")
+        play_audio_cue("info")
+        play_audio_cue("critical")
+        play_audio_cue("warning")
+
 
 if __name__ == "__main__":
     unittest.main()
