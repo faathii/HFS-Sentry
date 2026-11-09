@@ -26,6 +26,19 @@ class TestReportGenerator(unittest.TestCase):
         self.assertIn("Open Ports (2 entries)", html)
         self.assertIn("HTTP", html)
         self.assertIn("HTTPS", html)
+        self.assertIn("@media print", html)
+
+    def test_generate_html_report_escaping(self):
+        malicious_data = {
+            "tool": "LogSentinel",
+            "malicious_input": "<script>alert('xss')</script>",
+            "threats": [
+                {"ip": "1.2.3.4", "payload": "<script>alert(1)</script>"}
+            ]
+        }
+        html = generate_html_report(malicious_data)
+        self.assertNotIn("<script>alert", html)
+        self.assertIn("&lt;script&gt;alert", html)
 
 
 if __name__ == "__main__":

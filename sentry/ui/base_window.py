@@ -70,6 +70,7 @@ class BaseToolWindow(tk.Toplevel):
         file_menu = tk.Menu(menubar, tearoff=0, bg=COLORS["bg_card"], fg=COLORS["text_primary"])
         file_menu.add_command(label="Nuevo Análisis\tCtrl+N", command=self.clear_results)
         file_menu.add_command(label="Exportar Resultados (JSON)\tCtrl+S", command=self.export_results_json)
+        file_menu.add_command(label="Exportar Tabla (CSV)", command=self.export_results_csv)
         file_menu.add_command(label="Exportar Informe Ejecutivo (HTML)\tCtrl+H", command=self.export_report_html)
         file_menu.add_command(label="Exportar Informe (Texto)\tCtrl+E", command=self.export_report_txt)
         file_menu.add_separator()
@@ -340,9 +341,39 @@ class BaseToolWindow(tk.Toplevel):
             initialfile=f"{self.tool_id}_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         )
         if path:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(self.latest_results, f, indent=2)
-            messagebox.showinfo("Exportación Exitosa", f"Resultados guardados correctamente en:\n{path}")
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(self.latest_results, f, indent=2)
+                messagebox.showinfo("Exportación Exitosa", f"Resultados guardados correctamente en:\n{path}")
+            except Exception as e:
+                messagebox.showerror("Error al Guardar", f"No se pudo guardar el archivo JSON:\n{e}")
+
+    def export_results_csv(self) -> None:
+        """Export current structured results table to CSV file."""
+        if not hasattr(self, "tree") or not self.tree.get_children():
+            messagebox.showinfo("Sin Datos", "No hay filas en la tabla para exportar a CSV.")
+            return
+
+        path = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("Archivos CSV", "*.csv"), ("Todos los archivos", "*.*")],
+            title=f"Exportar Tabla CSV - {self.tool_title}",
+            initialfile=f"{self.tool_id}_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        )
+        if path:
+            try:
+                import csv
+                cols = self.tree["columns"]
+                headers = [self.tree.heading(c)["text"] for c in cols]
+                with open(path, "w", encoding="utf-8-sig", newline="") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(headers)
+                    for item_id in self.tree.get_children():
+                        row_vals = self.tree.item(item_id, "values")
+                        writer.writerow(row_vals)
+                messagebox.showinfo("Exportación Exitosa", f"Datos CSV exportados correctamente en:\n{path}")
+            except Exception as e:
+                messagebox.showerror("Error de Exportación", f"No se pudo guardar el archivo CSV:\n{e}")
 
     def export_report_html(self) -> None:
         """Generate and save professional self-contained executive HTML audit report."""
@@ -358,10 +389,13 @@ class BaseToolWindow(tk.Toplevel):
             initialfile=f"{self.tool_id}_audit_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
         )
         if path:
-            html_content = generate_html_report(self.latest_results, title=f"Auditoría Técnica — {self.tool_title}")
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(html_content)
-            messagebox.showinfo("Informe HTML Listo", f"Informe ejecutivo exportado exitosamente:\n{path}")
+            try:
+                html_content = generate_html_report(self.latest_results, title=f"Auditoría Técnica — {self.tool_title}")
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(html_content)
+                messagebox.showinfo("Informe HTML Listo", f"Informe ejecutivo exportado exitosamente:\n{path}")
+            except Exception as e:
+                messagebox.showerror("Error al Guardar", f"No se pudo guardar el informe HTML:\n{e}")
 
     def export_report_txt(self) -> None:
         """Export raw terminal console log to text file."""
@@ -376,9 +410,12 @@ class BaseToolWindow(tk.Toplevel):
             initialfile=f"{self.tool_id}_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
         )
         if path:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(content)
-            messagebox.showinfo("Exportación Exitosa", f"Registro guardado correctamente en:\n{path}")
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                messagebox.showinfo("Exportación Exitosa", f"Registro guardado correctamente en:\n{path}")
+            except Exception as e:
+                messagebox.showerror("Error al Guardar", f"No se pudo guardar el registro:\n{e}")
 
     def apply_prefill(self, value: str) -> None:
         """Override in subclasses to prefill target inputs when pivoting between tools."""

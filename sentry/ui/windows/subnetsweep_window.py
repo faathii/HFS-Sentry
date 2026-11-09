@@ -137,6 +137,13 @@ class SubnetSweepWindow(BaseToolWindow):
             messagebox.showerror("Dato Requerido", "Por favor ingrese una subred en notación CIDR.")
             return
 
+        import ipaddress
+        try:
+            ipaddress.ip_network(cidr, strict=False)
+        except Exception:
+            messagebox.showerror("CIDR Inválido", f"'{cidr}' no es una subred válida (ejemplo: 192.168.1.0/24).")
+            return
+
         duration = self._get_selected_duration()
         use_icmp = self.var_icmp.get()
 

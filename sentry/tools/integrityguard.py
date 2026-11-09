@@ -110,13 +110,17 @@ def generate_baseline(targets: List[str], baseline_file: str) -> Dict[str, Any]:
     return baseline_data
 
 
-def verify_integrity(baseline_file: str) -> Dict[str, Any]:
-    """Compare current filesystem against baseline snapshot."""
-    if not os.path.isfile(baseline_file):
-        raise FileNotFoundError(f"Baseline file '{baseline_file}' not found. Run with --init first.")
-
-    with open(baseline_file, "r", encoding="utf-8") as f:
-        baseline = json.load(f)
+def verify_integrity(baseline_source: Any) -> Dict[str, Any]:
+    """Compare current filesystem against baseline snapshot (path or loaded dict)."""
+    if isinstance(baseline_source, dict):
+        baseline = baseline_source
+    elif isinstance(baseline_source, str):
+        if not os.path.isfile(baseline_source):
+            raise FileNotFoundError(f"Baseline file '{baseline_source}' not found. Run with --init first.")
+        with open(baseline_source, "r", encoding="utf-8") as f:
+            baseline = json.load(f)
+    else:
+        raise TypeError(f"Expected file path string or dict for baseline, got {type(baseline_source).__name__}")
 
     baseline_files = baseline.get("files", {})
 

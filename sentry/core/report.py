@@ -5,6 +5,7 @@ Generates self-contained, responsive, dark/cyber styled audit reports.
 """
 
 from datetime import datetime, timezone
+import html as html_lib
 import json
 from typing import Any, Dict, List, Optional
 
@@ -55,11 +56,12 @@ def generate_html_report(data: Dict[str, Any], title: Optional[str] = None) -> s
     meta_rows = []
     for k, v in data.items():
         if isinstance(v, (str, int, float, bool)) and k not in ("tool",):
-            formatted_key = k.replace("_", " ").title()
+            formatted_key = html_lib.escape(k.replace("_", " ").title())
+            escaped_v = html_lib.escape(str(v))
             meta_rows.append(f"""
                 <div class="meta-item">
                     <span class="meta-label">{formatted_key}</span>
-                    <span class="meta-value">{v}</span>
+                    <span class="meta-value">{escaped_v}</span>
                 </div>
             """)
 
@@ -88,7 +90,7 @@ def generate_html_report(data: Dict[str, Any], title: Optional[str] = None) -> s
                     elif any(term in val_str.lower() for term in ("warn", "notice", "medium")):
                         cell_class = "warning"
 
-                    cells.append(f'<td class="{cell_class}">{val_str}</td>')
+                    cells.append(f'<td class="{cell_class}">{html_lib.escape(val_str)}</td>')
                 rows_html.append(f"<tr>{''.join(cells)}</tr>")
 
             table_sections.append(f"""
@@ -107,7 +109,7 @@ def generate_html_report(data: Dict[str, Any], title: Optional[str] = None) -> s
             """)
 
     # Raw JSON collapsible snippet
-    json_snippet = json.dumps(data, indent=2, ensure_ascii=False)
+    json_snippet = html_lib.escape(json.dumps(data, indent=2, ensure_ascii=False))
 
     html = f"""<!DOCTYPE html>
 <html lang="es">

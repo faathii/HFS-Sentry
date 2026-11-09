@@ -184,8 +184,11 @@ class QuickAuditDialog(tk.Toplevel):
             initialfile="hfs_sentry_quick_audit.html",
         )
         if path:
-            html = generate_html_report(self.latest_data, title="Auditoría Rápida de Salud — HFS-Sentry")
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(html)
-            messagebox.showinfo("Guardado", f"Informe HTML guardado en:\n{path}")
+            try:
+                html = generate_html_report(self.latest_data, title="Auditoría Rápida de Salud — HFS-Sentry")
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(html)
+                messagebox.showinfo("Guardado", f"Informe HTML guardado en:\n{path}")
+            except Exception as e:
+                messagebox.showerror("Error al Guardar", f"No se pudo guardar el archivo:\n{e}")
 

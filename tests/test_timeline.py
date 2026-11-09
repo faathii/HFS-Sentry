@@ -61,6 +61,15 @@ class TestTimelineFeatures(unittest.TestCase):
             self.assertEqual(ports[0]["status"], "ESTABLE")
             self.assertEqual(ports[0]["stability_percent"], 100.0)
 
+    def test_integrityguard_watch_timeline(self):
+        """IntegrityGuard timeline should monitor targets without crashing on dict/path input."""
+        test_file = os.path.abspath(__file__)
+        res = watch_integrity_timeline([test_file], duration=0.0)
+        self.assertIn("tampered", res)
+        self.assertFalse(res["tampered"])
+        self.assertEqual(res["total_monitored"], 1)
+        self.assertEqual(res["intact_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

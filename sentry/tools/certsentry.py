@@ -42,6 +42,9 @@ def inspect_certificate(host: str, port: int = 443, timeout: float = 3.0) -> Dic
         except Exception:
             pass
 
+    if not isinstance(cert, dict):
+        cert = {}
+
     # Extract Subject Common Name
     subject = {}
     for item in cert.get("subject", ()):

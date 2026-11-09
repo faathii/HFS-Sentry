@@ -149,6 +149,9 @@ class NetSentryWindow(BaseToolWindow):
 
         try:
             ports = self._parse_ports(self.entry_ports.get())
+            if not ports:
+                messagebox.showerror("Dato Requerido", "Por favor especifique al menos un puerto para escanear.")
+                return
         except Exception:
             messagebox.showerror("Error de Formato", "Formato de puertos no válido (ej. 22,80,443 o 20-100).")
             return

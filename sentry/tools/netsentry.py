@@ -113,8 +113,10 @@ def scan_single_port(host: str, port: int, timeout: float = 0.6) -> Optional[Dic
     """Probe single TCP port."""
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(timeout)
+    t0 = time.perf_counter()
     try:
         if s.connect_ex((host, port)) == 0:
+            latency = round((time.perf_counter() - t0) * 1000.0, 1)
             s.close()
             banner = grab_banner(host, port, timeout=0.8)
             service = SERVICE_NAMES.get(port, "Unknown")
@@ -124,6 +126,7 @@ def scan_single_port(host: str, port: int, timeout: float = 0.6) -> Optional[Dic
                 "state": "OPEN",
                 "service": service,
                 "banner": banner,
+                "latency_ms": latency,
                 "plaintext_risk": is_risk,
                 "risk_description": PLAINTEXT_RISK_PORTS.get(port, ""),
             }
@@ -196,7 +199,8 @@ def scan_ports_timeline(
             current_data = current_open.get(port)
 
             if port not in cumulative:
-                if is_open:
+                if is_open and current_data:
+                    lat = current_data.get("latency_ms", 0.0)
                     cumulative[port] = {
                         **current_data,
                         "first_seen": now_iso,
@@ -205,16 +209,17 @@ def scan_ports_timeline(
                         "checks_success": 1,
                         "stability_percent": 100.0,
                         "status": "ESTABLE",
-                        "latencies": [current_data["latency_ms"]],
+                        "latencies": [lat],
                     }
             else:
                 entry = cumulative[port]
                 entry["checks_total"] += 1
-                if is_open:
+                if is_open and current_data:
                     entry["checks_success"] += 1
                     entry["last_seen"] = now_iso
-                    entry["latencies"].append(current_data["latency_ms"])
-                    entry["latency_ms"] = current_data["latency_ms"]
+                    lat = current_data.get("latency_ms", 0.0)
+                    entry["latencies"].append(lat)
+                    entry["latency_ms"] = lat
                     if current_data.get("banner"):
                         entry["banner"] = current_data["banner"]
 

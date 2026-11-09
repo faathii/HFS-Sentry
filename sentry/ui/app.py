@@ -32,10 +32,13 @@ class SentrySuiteApp(tk.Tk):
         apply_suite_theme(self)
 
         # Set main window icon
-        icon_path = os.path.join("assets", "logos", "hfs_sentry.png")
-        self.hub_icon = load_icon(icon_path, size=(32, 32))
-        if self.hub_icon:
-            self.iconphoto(False, self.hub_icon)
+        try:
+            icon_path = os.path.join("assets", "logos", "hfs_sentry.png")
+            self.hub_icon = load_icon(icon_path, size=(32, 32))
+            if self.hub_icon:
+                self.iconphoto(False, self.hub_icon)
+        except Exception:
+            self.hub_icon = None
 
         # Track active child tool windows: {tool_id: [window_instances]}
         self.active_tool_windows: Dict[str, list] = {}
@@ -317,29 +320,57 @@ class SentrySuiteApp(tk.Tk):
             messagebox.showwarning("Aviso de Red", f"Sin salida exterior o entorno local aislado: {e}\n(Las herramientas de auditoría interna y análisis de logs siguen funcionando al 100%).")
 
     def _show_suite_settings(self) -> None:
+        from sentry.core.config import load_config, save_config
+
+        cfg = load_config()
+
         dlg = tk.Toplevel(self)
         dlg.title("Preferencias Globales — HFS-Sentry Suite")
-        dlg.geometry("480x360")
+        dlg.geometry("500x440")
+        dlg.minsize(440, 360)
         dlg.configure(bg=COLORS["bg_dark"])
         dlg.transient(self)
         dlg.grab_set()
 
-        ttk.Label(dlg, text="Preferencias del Sistema", font=FONTS["title_medium"], foreground=COLORS["accent_cyan"]).pack(pady=14)
+        ttk.Label(dlg, text="Preferencias de la Suite", font=FONTS["title_medium"], foreground=COLORS["accent_cyan"]).pack(pady=12)
 
         box = ttk.Frame(dlg, padding=16, style="Card.TFrame")
         box.pack(fill="both", expand=True, padx=16, pady=8)
 
-        ttk.Label(box, text="Modo de Ejecución:", font=FONTS["body_bold"], style="Card.TLabel").pack(anchor="w", pady=(0, 4))
-        ttk.Label(box, text="• Aplicación de Escritorio Nativa Local (Sin servidores HTTP)", style="CardSecondary.TLabel").pack(anchor="w")
-        ttk.Label(box, text="• Cero dependencias externas requeridas", style="CardSecondary.TLabel").pack(anchor="w")
-        ttk.Label(box, text="• Compatibilidad multiplataforma: Windows, Linux, macOS", style="CardSecondary.TLabel").pack(anchor="w", pady=(0, 10))
+        # 1. Sound alerts toggle
+        var_sound = tk.BooleanVar(value=cfg.get("sound_alerts_enabled", True))
+        chk_sound = ttk.Checkbutton(box, text="Activar alertas y avisos sonoros (Audio Cues)", variable=var_sound)
+        chk_sound.pack(anchor="w", pady=(0, 10))
 
-        ttk.Label(box, text="Directorio de Recursos:", font=FONTS["body_bold"], style="Card.TLabel").pack(anchor="w", pady=(0, 4))
-        ttk.Label(box, text=f"• Assets / Logotipos: {os.path.abspath('assets')}", style="CardSecondary.TLabel").pack(anchor="w")
-        ttk.Label(box, text=f"• Registro dinámico: {len(TOOL_WINDOW_MAP)} herramientas gráficas disponibles", style="CardSecondary.TLabel").pack(anchor="w")
+        # 2. Default duration
+        ttk.Label(box, text="Duración predeterminada de ventana temporal (segundos):", style="Card.TLabel").pack(anchor="w", pady=(4, 2))
+        spin_dur = ttk.Spinbox(box, from_=5, to=300, width=8)
+        spin_dur.set(str(int(cfg.get("default_duration_seconds", 30))))
+        spin_dur.pack(anchor="w", pady=(0, 10))
 
-        btn_ok = ttk.Button(dlg, text="Aceptar", command=dlg.destroy)
-        btn_ok.pack(pady=14)
+        # 3. Network timeout
+        ttk.Label(box, text="Timeout predeterminado para sockets (segundos):", style="Card.TLabel").pack(anchor="w", pady=(4, 2))
+        spin_timeout = ttk.Spinbox(box, from_=0.5, to=30.0, increment=0.5, width=8)
+        spin_timeout.set(str(float(cfg.get("network_timeout_seconds", 3.0))))
+        spin_timeout.pack(anchor="w", pady=(0, 10))
+
+        ttk.Label(box, text="• Cero dependencias externas (Python Estándar + Tkinter)", font=FONTS["caption"], style="CardSecondary.TLabel").pack(anchor="w")
+
+        def _save_and_close():
+            try:
+                cfg["sound_alerts_enabled"] = var_sound.get()
+                cfg["default_duration_seconds"] = int(spin_dur.get())
+                cfg["network_timeout_seconds"] = float(spin_timeout.get())
+                save_config(cfg)
+                messagebox.showinfo("Preferencias Guardadas", "Configuración actualizada y guardada correctamente.", parent=dlg)
+                dlg.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"No se pudo guardar la configuración: {e}", parent=dlg)
+
+        btn_box = ttk.Frame(dlg)
+        btn_box.pack(fill="x", padx=16, pady=12)
+        ttk.Button(btn_box, text="Guardar Preferencias", style="Primary.TButton", command=_save_and_close).pack(side="right", padx=4)
+        ttk.Button(btn_box, text="Cancelar", command=dlg.destroy).pack(side="right", padx=4)
 
     def _open_github(self) -> None:
         webbrowser.open_new_tab("https://github.com/faathii/HFS-Sentry")

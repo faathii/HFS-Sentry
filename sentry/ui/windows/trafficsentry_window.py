@@ -292,6 +292,13 @@ class TrafficSentryWindow(BaseToolWindow):
             self.summary_text.insert("end", "\n".join(lines))
         self.after(0, _render)
 
+    def apply_prefill(self, value: str) -> None:
+        """Prefill filter entry when pivoting from another tool."""
+        if hasattr(self, "entry_filter") and value:
+            self.entry_filter.delete(0, "end")
+            self.entry_filter.insert(0, str(value).strip())
+            self._apply_search_filter()
+
     def clear_results(self) -> None:
         for item in self.tree.get_children():
             self.tree.delete(item)

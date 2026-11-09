@@ -37,6 +37,23 @@ class TestUIEnhancements(unittest.TestCase):
         self.assertTrue(hasattr(win, "enable_treeview_sorting"))
         self.assertTrue(hasattr(win, "enable_treeview_context_menu"))
         self.assertTrue(hasattr(win, "apply_prefill"))
+        self.assertTrue(hasattr(win, "export_results_csv"))
+
+        win.apply_prefill("192.168.1.100")
+        self.assertEqual(win.entry_target.get(), "192.168.1.100")
+
+        win.destroy()
+        app.destroy()
+
+    def test_trafficsentry_prefill(self):
+        """TrafficSentry should prefill filter entry and execute filtering."""
+        from sentry.ui.windows.trafficsentry_window import TrafficSentryWindow
+        app = SentrySuiteApp()
+        win = TrafficSentryWindow(master=app)
+
+        self.assertTrue(hasattr(win, "apply_prefill"))
+        win.apply_prefill("192.168.0.153")
+        self.assertEqual(win.entry_filter.get(), "192.168.0.153")
 
         win.destroy()
         app.destroy()

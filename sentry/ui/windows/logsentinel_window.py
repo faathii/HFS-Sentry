@@ -155,7 +155,10 @@ class LogSentinelWindow(BaseToolWindow):
             return
 
         duration = self._get_selected_duration()
-        ssh_thresh = int(self.spin_thresh.get())
+        try:
+            ssh_thresh = max(1, int(self.spin_thresh.get()))
+        except Exception:
+            ssh_thresh = 5
 
         self.is_running = True
         self.btn_run.configure(state="disabled")

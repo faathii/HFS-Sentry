@@ -211,9 +211,7 @@ class IntegrityGuardWindow(BaseToolWindow):
                 else:
                     if not os.path.isfile(baseline_file):
                         raise FileNotFoundError(f"No existe el archivo de línea base '{baseline_file}'. Cree uno primero.")
-                    with open(baseline_file, "r", encoding="utf-8") as f:
-                        baseline = json.load(f)
-                    res = verify_integrity(baseline)
+                    res = verify_integrity(baseline_file)
 
                 self.latest_results = res
                 if self.stop_requested.is_set():
