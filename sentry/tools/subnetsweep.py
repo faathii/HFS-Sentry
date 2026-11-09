@@ -164,7 +164,17 @@ def scan_single_host(ip: str, use_icmp: bool = True) -> Optional[Dict[str, Any]]
     }
 
 
-def sweep_subnet(cidr: str, workers: int = 40, use_icmp: bool = True) -> List[Dict[str, Any]]:
+def _is_stopped(stop_check: Optional[Any]) -> bool:
+    if stop_check is None:
+        return False
+    if hasattr(stop_check, "is_set"):
+        return stop_check.is_set()
+    if callable(stop_check):
+        return stop_check()
+    return bool(stop_check)
+
+
+def sweep_subnet(cidr: str, workers: int = 40, use_icmp: bool = True, stop_check: Optional[Any] = None) -> List[Dict[str, Any]]:
     """Perform concurrent asset discovery across a CIDR subnet."""
     network = ipaddress.ip_network(cidr, strict=False)
     ip_list = [str(ip) for ip in network.hosts()]
@@ -172,11 +182,15 @@ def sweep_subnet(cidr: str, workers: int = 40, use_icmp: bool = True) -> List[Di
     active_hosts: List[Dict[str, Any]] = []
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        future_to_ip = {
-            executor.submit(scan_single_host, ip, use_icmp): ip
-            for ip in ip_list
-        }
+        future_to_ip = {}
+        for ip in ip_list:
+            if _is_stopped(stop_check):
+                break
+            future_to_ip[executor.submit(scan_single_host, ip, use_icmp)] = ip
+
         for future in as_completed(future_to_ip):
+            if _is_stopped(stop_check):
+                break
             res = future.result()
             if res:
                 active_hosts.append(res)
@@ -199,7 +213,7 @@ def sweep_subnet_timeline(
     workers: int = 40,
     use_icmp: bool = True,
     progress_callback: Optional[Callable[[List[Dict[str, Any]], float], None]] = None,
-    stop_check: Optional[Callable[[], bool]] = None,
+    stop_check: Optional[Any] = None,
 ) -> List[Dict[str, Any]]:
     """Perform continuous or time-window network discovery over time (e.g. 30 seconds).
 
@@ -213,7 +227,10 @@ def sweep_subnet_timeline(
         now = time.time()
         remaining = max(0.0, end_time - now) if duration > 0 else 0.0
 
-        current_hosts = sweep_subnet(cidr=cidr, workers=workers, use_icmp=use_icmp)
+        if _is_stopped(stop_check):
+            break
+
+        current_hosts = sweep_subnet(cidr=cidr, workers=workers, use_icmp=use_icmp, stop_check=stop_check)
         current_ips = {h["ip"] for h in current_hosts}
         now_iso = datetime.datetime.now().strftime("%H:%M:%S")
 
@@ -254,13 +271,18 @@ def sweep_subnet_timeline(
         if duration <= 0:
             break
 
-        if stop_check and stop_check():
+        if _is_stopped(stop_check):
             break
 
         if now >= end_time:
             break
 
-        time.sleep(min(interval, max(0.5, end_time - now)))
+        sleep_time = min(interval, max(0.5, end_time - now))
+        if hasattr(stop_check, "wait"):
+            if stop_check.wait(timeout=sleep_time):
+                break
+        else:
+            time.sleep(sleep_time)
 
     return result_list
 

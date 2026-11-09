@@ -12,25 +12,24 @@ from sentry.ui.theme import COLORS, FONTS
 
 
 class TrafficSentryWindow(BaseToolWindow):
-    """TrafficSentry Independent GUI Application."""
+    """TrafficSentry Independent GUI Application with responsive layout and live stopwatch."""
 
     tool_id = "trafficsentry"
     tool_title = "TrafficSentry — Active Sockets & Port Exposure Auditor"
     tool_category = "Host Security & Network"
     tool_version = "1.1.0"
-    icon_filename = "hfs_sentry.png"
+    icon_filename = "trafficsentry.png"
 
     def build_controls(self, parent: ttk.Frame) -> None:
-        """Construct filter options, duration controls, search and refresh buttons."""
-        self.stop_requested = False
+        """Construct filter options, duration controls, search and responsive action buttons."""
         self.is_running = False
         self.all_sockets: List[Dict[str, Any]] = []
 
+        # Row 1: Parameters and filters
         row1 = ttk.Frame(parent, style="Card.TFrame")
-        row1.pack(fill="x", pady=4)
+        row1.pack(fill="x", pady=(2, 6))
 
-        # Duración / Modo de Ventana Temporal
-        ttk.Label(row1, text="Ventana Temporal:", style="Card.TLabel").pack(side="left", padx=(0, 6))
+        ttk.Label(row1, text="Ventana:", style="Card.TLabel").pack(side="left", padx=(0, 6))
         self.combo_duration = ttk.Combobox(
             row1,
             values=[
@@ -41,34 +40,33 @@ class TrafficSentryWindow(BaseToolWindow):
                 "🔄 Monitoreo Continuo (En Vivo)",
             ],
             state="readonly",
-            width=28,
+            width=26,
         )
         self.combo_duration.current(0)
-        self.combo_duration.pack(side="left", padx=(0, 16))
+        self.combo_duration.pack(side="left", padx=(0, 14))
 
-        # Checkbox Solo Escuchando
         self.var_listen_only = tk.BooleanVar(value=False)
-        self.chk_listen = ttk.Checkbutton(row1, text="Solo Puertos Escuchando (LISTEN)", variable=self.var_listen_only)
-        self.chk_listen.pack(side="left", padx=(0, 16))
+        self.chk_listen = ttk.Checkbutton(row1, text="Solo Escuchando (LISTEN)", variable=self.var_listen_only)
+        self.chk_listen.pack(side="left", padx=(0, 14))
 
-        # Buscador en Tiempo Real
-        ttk.Label(row1, text="Filtrar (IP, Proceso, Puerto):", style="Card.TLabel").pack(side="left", padx=(0, 6))
-        self.entry_filter = ttk.Entry(row1, width=22)
-        self.entry_filter.pack(side="left", padx=(0, 16))
+        ttk.Label(row1, text="Filtrar:", style="Card.TLabel").pack(side="left", padx=(0, 6))
+        self.entry_filter = ttk.Entry(row1, width=20)
+        self.entry_filter.pack(side="left", fill="x", expand=True, padx=(0, 4))
         self.entry_filter.bind("<KeyRelease>", lambda e: self._apply_search_filter())
 
-        # Botón Detener
-        self.btn_stop = ttk.Button(row1, text="⏹ Detener", command=self.stop_analysis, state="disabled")
-        self.btn_stop.pack(side="right", padx=4)
+        # Row 2: Action Toolbar (Buttons & Progress Banner guaranteed visible)
+        row2 = ttk.Frame(parent, style="Card.TFrame")
+        row2.pack(fill="x", pady=(2, 2))
 
-        # Botón Iniciar
-        self.btn_run = ttk.Button(row1, text="▶ Iniciar Auditoría Temporal", style="Primary.TButton", command=self.start_analysis)
-        self.btn_run.pack(side="right", padx=4)
-
-        # Indicador de estado de captura temporal
         self.banner_var = tk.StringVar(value="Listo para auditar en ventana de tiempo acumulativo.")
-        self.lbl_banner = ttk.Label(parent, textvariable=self.banner_var, font=FONTS["code_sm"], foreground=COLORS["accent_cyan"])
-        self.lbl_banner.pack(anchor="w", padx=4, pady=(0, 4))
+        self.lbl_banner = ttk.Label(row2, textvariable=self.banner_var, font=FONTS["code_small"], foreground=COLORS["accent_cyan"])
+        self.lbl_banner.pack(side="left", fill="x", expand=True, padx=(0, 10))
+
+        self.btn_stop = ttk.Button(row2, text="⏹ Detener", command=self.stop_analysis, state="disabled")
+        self.btn_stop.pack(side="right", padx=(4, 0))
+
+        self.btn_run = ttk.Button(row2, text="▶ Iniciar Auditoría Temporal", style="Primary.TButton", command=self.start_analysis)
+        self.btn_run.pack(side="right", padx=4)
 
     def build_results_table(self, parent: ttk.Frame) -> None:
         """Create Treeview table for active system sockets with process names and durations."""
@@ -128,7 +126,6 @@ class TrafficSentryWindow(BaseToolWindow):
             return
 
         self.is_running = True
-        self.stop_requested = False
         self.btn_run.configure(state="disabled")
         self.btn_stop.configure(state="normal")
 
@@ -136,9 +133,7 @@ class TrafficSentryWindow(BaseToolWindow):
         listen_only = self.var_listen_only.get()
 
         self.clear_results()
-        mode_str = f"{int(duration)}s" if duration < 100000 else "Monitoreo Continuo"
-        if duration == 0:
-            mode_str = "Instantáneo (1s)"
+        mode_str = f"{int(duration)}s" if duration < 100000 and duration > 0 else ("Monitoreo Continuo" if duration > 0 else "Instantáneo (1s)")
         self.log(f"Iniciando auditoría perimetral de sockets — Ventana: {mode_str}...")
 
         def _on_progress(cumulative_sockets: List[Dict[str, Any]], remaining: float):
@@ -148,7 +143,7 @@ class TrafficSentryWindow(BaseToolWindow):
 
             rem_text = f"{int(remaining)}s restantes" if duration < 100000 and duration > 0 else "Modo Continuo Activo"
             self.banner_var.set(
-                f"● MONITOREANDO ({rem_text}) — Total Acumulado: {len(cumulative_sockets)} | Activos: {active_count} | Efímeros/Cerrados: {closed_count}"
+                f"● MONITOREANDO ({rem_text}) — Total: {len(cumulative_sockets)} | Activos: {active_count} | Efímeros: {closed_count}"
             )
             self.after(0, self._apply_search_filter)
 
@@ -159,7 +154,7 @@ class TrafficSentryWindow(BaseToolWindow):
                     interval=1.0,
                     listening_only=listen_only,
                     progress_callback=_on_progress,
-                    stop_check=lambda: self.stop_requested,
+                    stop_check=self.stop_requested,
                 )
                 self.all_sockets = sockets
                 self.latest_results = {
@@ -168,7 +163,10 @@ class TrafficSentryWindow(BaseToolWindow):
                     "total_sockets": len(sockets),
                     "sockets": sockets,
                 }
-                self.log(f"Auditoría finalizada. {len(sockets)} eventos de red registrados en la ventana de observación.")
+                if self.stop_requested.is_set():
+                    self.log(f"Auditoría detenida por el usuario. {len(sockets)} eventos registrados.")
+                else:
+                    self.log(f"Auditoría finalizada. {len(sockets)} eventos de red registrados en la ventana de observación.")
                 self.after(0, self._apply_search_filter)
                 self._update_summary(self.latest_results)
             except Exception as e:
@@ -177,15 +175,18 @@ class TrafficSentryWindow(BaseToolWindow):
                 self.is_running = False
                 self.after(0, lambda: self.btn_run.configure(state="normal"))
                 self.after(0, lambda: self.btn_stop.configure(state="disabled"))
-                self.banner_var.set(f"✔ COMPLETADO — {len(self.all_sockets)} sockets capturados en la ventana de tiempo.")
+                if self.stop_requested.is_set():
+                    self.banner_var.set("⏹ Auditoría detenida por el operador.")
+                else:
+                    self.banner_var.set(f"✔ COMPLETADO — {len(self.all_sockets)} sockets capturados en la ventana de tiempo.")
 
-        self.execute_async(_worker)
+        self.execute_async(_worker, target_duration=duration)
 
     def stop_analysis(self) -> None:
-        if self.is_running:
-            self.stop_requested = True
-            self.log("[*] Solicitud de parada enviada. Finalizando recolección...")
-            self.btn_stop.configure(state="disabled")
+        super().stop_analysis()
+        self.btn_run.configure(state="normal")
+        self.btn_stop.configure(state="disabled")
+        self.banner_var.set("⏹ Auditoría detenida por el operador.")
 
     def _apply_search_filter(self) -> None:
         """Filter table rows based on search input and render timeline status."""
@@ -204,7 +205,6 @@ class TrafficSentryWindow(BaseToolWindow):
             risk = s["risk_level"]
             status = s.get("timeline_status", s.get("state", "ACTIVO"))
 
-            # Filter matching
             if query:
                 match = (
                     query in local_str.lower()

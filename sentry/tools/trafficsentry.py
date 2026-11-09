@@ -199,7 +199,7 @@ def audit_sockets_timeline(
     interval: float = 1.0,
     listening_only: bool = False,
     progress_callback: Optional[Callable[[List[Dict[str, Any]], float], None]] = None,
-    stop_check: Optional[Callable[[], bool]] = None,
+    stop_check: Optional[Any] = None,
 ) -> List[Dict[str, Any]]:
     """Capture socket activity over a cumulative time window (e.g. 30 seconds).
 
@@ -210,10 +210,22 @@ def audit_sockets_timeline(
     start_time = time.time()
     end_time = start_time + duration if duration > 0 else start_time
 
+    def _is_stopped() -> bool:
+        if stop_check is None:
+            return False
+        if hasattr(stop_check, "is_set"):
+            return stop_check.is_set()
+        if callable(stop_check):
+            return stop_check()
+        return bool(stop_check)
+
     while True:
         now = time.time()
         elapsed = now - start_time
         remaining = max(0.0, end_time - now) if duration > 0 else 0.0
+
+        if _is_stopped():
+            break
 
         current_sockets = audit_active_sockets(listening_only=listening_only)
         current_keys = set()
@@ -265,13 +277,18 @@ def audit_sockets_timeline(
         if duration <= 0:
             break
 
-        if stop_check and stop_check():
+        if _is_stopped():
             break
 
         if now >= end_time:
             break
 
-        time.sleep(min(interval, max(0.1, end_time - now)))
+        sleep_time = min(interval, max(0.1, end_time - now))
+        if hasattr(stop_check, "wait"):
+            if stop_check.wait(timeout=sleep_time):
+                break
+        else:
+            time.sleep(sleep_time)
 
     return result_list
 

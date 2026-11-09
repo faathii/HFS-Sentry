@@ -1,4 +1,4 @@
-"""Independent Desktop Window for IntegrityGuard (FIM) with Time-Window Watcher."""
+"""Independent Desktop Window for IntegrityGuard (FIM) with responsive layout and live stopwatch."""
 
 import json
 import os
@@ -29,24 +29,41 @@ class IntegrityGuardWindow(BaseToolWindow):
     icon_filename = "integrityguard.png"
 
     def build_controls(self, parent: ttk.Frame) -> None:
-        """Construct baseline file picker, target manager, duration controls and check buttons."""
-        self.stop_requested = False
+        """Construct baseline file picker, target manager, duration controls and responsive buttons."""
         self.is_running = False
 
+        # Row 1: Targets and baseline file
         row1 = ttk.Frame(parent, style="Card.TFrame")
-        row1.pack(fill="x", pady=2)
+        row1.pack(fill="x", pady=(2, 6))
 
-        ttk.Label(row1, text="Base de Datos Baseline (JSON):", style="Card.TLabel").pack(side="left", padx=(0, 6))
-        self.entry_baseline = ttk.Entry(row1, width=28)
+        ttk.Label(row1, text="Línea Base (JSON):", style="Card.TLabel").pack(side="left", padx=(0, 6))
+        self.entry_baseline = ttk.Entry(row1, width=22)
         self.entry_baseline.insert(0, "sentry_baseline.json")
-        self.entry_baseline.pack(side="left", padx=(0, 8))
+        self.entry_baseline.pack(side="left", padx=(0, 6))
 
         btn_browse_base = ttk.Button(row1, text="📁 Examinar...", command=self._browse_baseline)
-        btn_browse_base.pack(side="left", padx=(0, 14))
+        btn_browse_base.pack(side="left", padx=(0, 12))
 
-        ttk.Label(row1, text="Ventana:", style="Card.TLabel").pack(side="left", padx=(0, 6))
+        ttk.Label(row1, text="Objetivos:", style="Card.TLabel").pack(side="left", padx=(0, 6))
+        self.entry_target = ttk.Entry(row1, width=28)
+        sys_os = platform.system()
+        def_target = DEFAULT_TARGET_PATHS.get(sys_os, [DEFAULT_TARGET_PATHS["Linux"][0]])[0]
+        self.entry_target.insert(0, def_target)
+        self.entry_target.pack(side="left", fill="x", expand=True, padx=(0, 6))
+
+        btn_add_file = ttk.Button(row1, text="+ Archivo", command=self._add_file_target)
+        btn_add_file.pack(side="left", padx=2)
+
+        btn_add_dir = ttk.Button(row1, text="+ Carpeta", command=self._add_dir_target)
+        btn_add_dir.pack(side="left", padx=2)
+
+        # Row 2: Action toolbar (Buttons & Banner guaranteed visible)
+        row2 = ttk.Frame(parent, style="Card.TFrame")
+        row2.pack(fill="x", pady=(2, 2))
+
+        ttk.Label(row2, text="Ventana:", style="Card.TLabel").pack(side="left", padx=(0, 6))
         self.combo_duration = ttk.Combobox(
-            row1,
+            row2,
             values=[
                 "⚡ Verificación Instantánea",
                 "⏱️ Ventana 30s (Centinela Activo)",
@@ -57,37 +74,20 @@ class IntegrityGuardWindow(BaseToolWindow):
             width=26,
         )
         self.combo_duration.current(0)
-        self.combo_duration.pack(side="left", padx=(0, 14))
-
-        self.btn_stop = ttk.Button(row1, text="⏹ Detener", command=self.stop_analysis, state="disabled")
-        self.btn_stop.pack(side="right", padx=4)
-
-        self.btn_check = ttk.Button(row1, text="🛡️ Verificar Integridad", style="Primary.TButton", command=self.start_analysis)
-        self.btn_check.pack(side="right", padx=4)
-
-        row2 = ttk.Frame(parent, style="Card.TFrame")
-        row2.pack(fill="x", pady=(6, 2))
-
-        ttk.Label(row2, text="Objetivos a Vigilar:", style="Card.TLabel").pack(side="left", padx=(0, 6))
-        self.entry_target = ttk.Entry(row2, width=38)
-        sys_os = platform.system()
-        def_target = DEFAULT_TARGET_PATHS.get(sys_os, [DEFAULT_TARGET_PATHS["Linux"][0]])[0]
-        self.entry_target.insert(0, def_target)
-        self.entry_target.pack(side="left", padx=(0, 8))
-
-        btn_add_file = ttk.Button(row2, text="+ Archivo", command=self._add_file_target)
-        btn_add_file.pack(side="left", padx=2)
-
-        btn_add_dir = ttk.Button(row2, text="+ Carpeta", command=self._add_dir_target)
-        btn_add_dir.pack(side="left", padx=2)
+        self.combo_duration.pack(side="left", padx=(0, 10))
 
         self.btn_init = ttk.Button(row2, text="➕ Crear Línea Base (SHA-256)", command=self._create_baseline)
-        self.btn_init.pack(side="right", padx=4)
+        self.btn_init.pack(side="left", padx=(0, 10))
 
-        # Progress banner
         self.banner_var = tk.StringVar(value="Listo para auditar la integridad de archivos críticos.")
-        self.lbl_banner = ttk.Label(parent, textvariable=self.banner_var, font=FONTS["code_sm"], foreground=COLORS["accent_cyan"])
-        self.lbl_banner.pack(anchor="w", padx=4, pady=(0, 4))
+        self.lbl_banner = ttk.Label(row2, textvariable=self.banner_var, font=FONTS["code_small"], foreground=COLORS["accent_cyan"])
+        self.lbl_banner.pack(side="left", fill="x", expand=True, padx=(0, 10))
+
+        self.btn_stop = ttk.Button(row2, text="⏹ Detener", command=self.stop_analysis, state="disabled")
+        self.btn_stop.pack(side="right", padx=(4, 0))
+
+        self.btn_check = ttk.Button(row2, text="🛡️ Verificar Integridad", style="Primary.TButton", command=self.start_analysis)
+        self.btn_check.pack(side="right", padx=4)
 
     def build_results_table(self, parent: ttk.Frame) -> None:
         """Create Treeview table for file status and cryptographic hashes."""
@@ -173,7 +173,6 @@ class IntegrityGuardWindow(BaseToolWindow):
         duration = self._get_selected_duration()
 
         self.is_running = True
-        self.stop_requested = False
         self.btn_check.configure(state="disabled")
         self.btn_stop.configure(state="normal")
 
@@ -202,7 +201,7 @@ class IntegrityGuardWindow(BaseToolWindow):
                         duration=duration,
                         poll_interval=1.0,
                         progress_callback=_on_progress,
-                        stop_check=lambda: self.stop_requested,
+                        stop_check=self.stop_requested,
                     )
                 else:
                     if not os.path.isfile(baseline_file):
@@ -212,6 +211,10 @@ class IntegrityGuardWindow(BaseToolWindow):
                     res = verify_integrity(baseline)
 
                 self.latest_results = res
+                if self.stop_requested.is_set():
+                    self.log("Verificación de integridad detenida por el usuario.")
+                else:
+                    self.log("Auditoría de integridad finalizada.")
                 self.after(0, lambda: self._render_results(res))
                 self._update_summary(res, baseline_file)
             except Exception as e:
@@ -220,15 +223,18 @@ class IntegrityGuardWindow(BaseToolWindow):
                 self.is_running = False
                 self.after(0, lambda: self.btn_check.configure(state="normal"))
                 self.after(0, lambda: self.btn_stop.configure(state="disabled"))
-                self.banner_var.set(f"✔ COMPLETADO — Auditoría de integridad finalizada.")
+                if self.stop_requested.is_set():
+                    self.banner_var.set("⏹ Centinela de integridad detenido por el operador.")
+                else:
+                    self.banner_var.set("✔ COMPLETADO — Auditoría de integridad finalizada.")
 
-        self.execute_async(_worker)
+        self.execute_async(_worker, target_duration=duration)
 
     def stop_analysis(self) -> None:
-        if self.is_running:
-            self.stop_requested = True
-            self.log("[*] Solicitud de detención del centinela de integridad...")
-            self.btn_stop.configure(state="disabled")
+        super().stop_analysis()
+        self.btn_check.configure(state="normal")
+        self.btn_stop.configure(state="disabled")
+        self.banner_var.set("⏹ Centinela de integridad detenido por el operador.")
 
     def _render_results(self, res: Dict[str, Any]) -> None:
         for item in self.tree.get_children():

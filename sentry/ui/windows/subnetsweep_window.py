@@ -1,4 +1,4 @@
-"""Independent Desktop Window for SubnetSweep."""
+"""Independent Desktop Window for SubnetSweep with responsive layout and live stopwatch."""
 
 import socket
 import time
@@ -21,13 +21,9 @@ class SubnetSweepWindow(BaseToolWindow):
     icon_filename = "subnetsweep.png"
 
     def build_controls(self, parent: ttk.Frame) -> None:
-        """Construct subnet entry, duration controls, concurrency and sweep action buttons."""
-        self.stop_requested = False
+        """Construct subnet entry, duration controls, concurrency and responsive action buttons."""
         self.is_running = False
         self.all_hosts: List[Dict[str, Any]] = []
-
-        row1 = ttk.Frame(parent, style="Card.TFrame")
-        row1.pack(fill="x", pady=2)
 
         # Detect local IP
         default_cidr = "192.168.1.0/24"
@@ -41,10 +37,14 @@ class SubnetSweepWindow(BaseToolWindow):
         except Exception:
             pass
 
+        # Row 1: Inputs and filters
+        row1 = ttk.Frame(parent, style="Card.TFrame")
+        row1.pack(fill="x", pady=(2, 6))
+
         ttk.Label(row1, text="Subred CIDR:", style="Card.TLabel").pack(side="left", padx=(0, 6))
-        self.entry_cidr = ttk.Entry(row1, width=18)
+        self.entry_cidr = ttk.Entry(row1, width=20)
         self.entry_cidr.insert(0, default_cidr)
-        self.entry_cidr.pack(side="left", padx=(0, 12))
+        self.entry_cidr.pack(side="left", padx=(0, 14))
 
         ttk.Label(row1, text="Ventana:", style="Card.TLabel").pack(side="left", padx=(0, 6))
         self.combo_duration = ttk.Combobox(
@@ -56,25 +56,28 @@ class SubnetSweepWindow(BaseToolWindow):
                 "🔄 Monitoreo Continuo",
             ],
             state="readonly",
-            width=24,
+            width=26,
         )
         self.combo_duration.current(0)
-        self.combo_duration.pack(side="left", padx=(0, 12))
+        self.combo_duration.pack(side="left", padx=(0, 14))
 
         self.var_icmp = tk.BooleanVar(value=True)
         self.chk_icmp = ttk.Checkbutton(row1, text="Ping ICMP", variable=self.var_icmp)
-        self.chk_icmp.pack(side="left", padx=(0, 12))
+        self.chk_icmp.pack(side="left", padx=(0, 10))
 
-        self.btn_run = ttk.Button(row1, text="▶ Iniciar Barrido", style="Primary.TButton", command=self.start_analysis)
-        self.btn_run.pack(side="right", padx=4)
+        # Row 2: Action Toolbar (Guaranteed Visible)
+        row2 = ttk.Frame(parent, style="Card.TFrame")
+        row2.pack(fill="x", pady=(2, 2))
 
-        self.btn_stop = ttk.Button(row1, text="⏹ Detener", command=self.stop_analysis, state="disabled")
-        self.btn_stop.pack(side="right", padx=4)
-
-        # Progress banner
         self.banner_var = tk.StringVar(value="Listo para escanear subred local.")
-        self.lbl_banner = ttk.Label(parent, textvariable=self.banner_var, font=FONTS["code_sm"], foreground=COLORS["accent_cyan"])
-        self.lbl_banner.pack(anchor="w", padx=4, pady=(0, 4))
+        self.lbl_banner = ttk.Label(row2, textvariable=self.banner_var, font=FONTS["code_small"], foreground=COLORS["accent_cyan"])
+        self.lbl_banner.pack(side="left", fill="x", expand=True, padx=(0, 10))
+
+        self.btn_stop = ttk.Button(row2, text="⏹ Detener", command=self.stop_analysis, state="disabled")
+        self.btn_stop.pack(side="right", padx=(4, 0))
+
+        self.btn_run = ttk.Button(row2, text="▶ Iniciar Barrido", style="Primary.TButton", command=self.start_analysis)
+        self.btn_run.pack(side="right", padx=4)
 
     def build_results_table(self, parent: ttk.Frame) -> None:
         """Create Treeview table for discovered network devices with temporal tracking."""
@@ -133,7 +136,6 @@ class SubnetSweepWindow(BaseToolWindow):
         use_icmp = self.var_icmp.get()
 
         self.is_running = True
-        self.stop_requested = False
         self.btn_run.configure(state="disabled")
         self.btn_stop.configure(state="normal")
 
@@ -163,10 +165,10 @@ class SubnetSweepWindow(BaseToolWindow):
                         workers=35,
                         use_icmp=use_icmp,
                         progress_callback=_on_progress,
-                        stop_check=lambda: self.stop_requested,
+                        stop_check=self.stop_requested,
                     )
                 else:
-                    hosts = sweep_subnet(cidr=cidr, workers=35, use_icmp=use_icmp)
+                    hosts = sweep_subnet(cidr=cidr, workers=35, use_icmp=use_icmp, stop_check=self.stop_requested)
                     for h in hosts:
                         h["status"] = "ACTIVO"
                         h["duration_sec"] = round(time.time() - start_t, 1)
@@ -181,7 +183,10 @@ class SubnetSweepWindow(BaseToolWindow):
                     "active_hosts_count": len(hosts),
                     "hosts": hosts,
                 }
-                self.log(f"Barrido completado en {elapsed}s. {len(hosts)} dispositivos localizados.")
+                if self.stop_requested.is_set():
+                    self.log(f"Barrido detenido por el usuario. {len(hosts)} dispositivos registrados.")
+                else:
+                    self.log(f"Barrido completado en {elapsed}s. {len(hosts)} dispositivos localizados.")
                 self.after(0, self._render_hosts)
                 self._update_summary(self.latest_results, elapsed)
             except Exception as e:
@@ -190,15 +195,18 @@ class SubnetSweepWindow(BaseToolWindow):
                 self.is_running = False
                 self.after(0, lambda: self.btn_run.configure(state="normal"))
                 self.after(0, lambda: self.btn_stop.configure(state="disabled"))
-                self.banner_var.set(f"✔ COMPLETADO — {len(self.all_hosts)} hosts descubiertos en la subred.")
+                if self.stop_requested.is_set():
+                    self.banner_var.set("⏹ Barrido detenido por el operador.")
+                else:
+                    self.banner_var.set(f"✔ COMPLETADO — {len(self.all_hosts)} hosts descubiertos en la subred.")
 
-        self.execute_async(_worker)
+        self.execute_async(_worker, target_duration=duration)
 
     def stop_analysis(self) -> None:
-        if self.is_running:
-            self.stop_requested = True
-            self.log("[*] Solicitud de parada de barrido enviada...")
-            self.btn_stop.configure(state="disabled")
+        super().stop_analysis()
+        self.btn_run.configure(state="normal")
+        self.btn_stop.configure(state="disabled")
+        self.banner_var.set("⏹ Barrido detenido por el operador.")
 
     def _render_hosts(self) -> None:
         for item in self.tree.get_children():

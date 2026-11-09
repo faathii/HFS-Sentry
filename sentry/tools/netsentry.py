@@ -153,6 +153,16 @@ def scan_ports(host: str, ports: List[int], workers: int = 20, timeout: float = 
     return open_ports
 
 
+def _is_stopped(stop_check: Optional[Any]) -> bool:
+    if stop_check is None:
+        return False
+    if hasattr(stop_check, "is_set"):
+        return stop_check.is_set()
+    if callable(stop_check):
+        return stop_check()
+    return bool(stop_check)
+
+
 def scan_ports_timeline(
     host: str,
     ports: List[int],
@@ -161,7 +171,7 @@ def scan_ports_timeline(
     timeout: float = 0.5,
     workers: int = 30,
     progress_callback: Optional[Callable[[List[Dict[str, Any]], float], None]] = None,
-    stop_check: Optional[Callable[[], bool]] = None,
+    stop_check: Optional[Any] = None,
 ) -> List[Dict[str, Any]]:
     """Monitor TCP port availability and jitter over a time window (e.g. 30 seconds).
 
@@ -174,6 +184,9 @@ def scan_ports_timeline(
     while True:
         now = time.time()
         remaining = max(0.0, end_time - now) if duration > 0 else 0.0
+
+        if _is_stopped(stop_check):
+            break
 
         current_open = {p["port"]: p for p in scan_ports(host, ports, timeout=timeout, workers=workers)}
         now_iso = datetime.datetime.now().strftime("%H:%M:%S")
@@ -221,13 +234,18 @@ def scan_ports_timeline(
         if duration <= 0:
             break
 
-        if stop_check and stop_check():
+        if _is_stopped(stop_check):
             break
 
         if now >= end_time:
             break
 
-        time.sleep(min(interval, max(0.5, end_time - now)))
+        sleep_time = min(interval, max(0.5, end_time - now))
+        if hasattr(stop_check, "wait"):
+            if stop_check.wait(timeout=sleep_time):
+                break
+        else:
+            time.sleep(sleep_time)
 
     return result_list
 

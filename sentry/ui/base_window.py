@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import threading
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from typing import Any, Callable, Dict, Optional
@@ -27,13 +28,16 @@ class BaseToolWindow(tk.Toplevel):
     def __init__(self, master: Optional[tk.Tk] = None) -> None:
         super().__init__(master)
         self.title(f"{self.tool_title} - HFS-Sentry Suite")
-        self.geometry("960x680")
-        self.minsize(800, 560)
+        self.geometry("1080x720")
+        self.minsize(860, 580)
         self.configure(bg=COLORS["bg_dark"])
 
         self.worker_thread: Optional[threading.Thread] = None
         self.stop_requested = threading.Event()
         self.latest_results: Optional[Dict[str, Any]] = None
+        self._stopwatch_running = False
+        self._stopwatch_start_time = 0.0
+        self._stopwatch_target_duration = 0.0
 
         # Set window icon if available
         icon_path = os.path.join("assets", "logos", self.icon_filename)
@@ -191,15 +195,59 @@ class BaseToolWindow(tk.Toplevel):
         self.summary_text.insert("end", "Ejecute un análisis para generar el informe de diagnóstico técnico.\n")
 
     def _build_status_bar(self) -> None:
-        """Bottom status bar with progress bar and timestamp."""
+        """Bottom status bar with digital stopwatch, progress bar and timestamp."""
         status_frame = ttk.Frame(self, padding=(12, 6), style="Surface.TFrame")
         status_frame.pack(fill="x", side="bottom")
 
         self.lbl_status = ttk.Label(status_frame, text="Listo.", font=FONTS["caption"], background=COLORS["surface"])
         self.lbl_status.pack(side="left")
 
-        self.progress_bar = ttk.Progressbar(status_frame, orient="horizontal", mode="indeterminate", length=180)
+        # Digital Chronometer Stopwatch right next to progress bar
+        self.lbl_stopwatch = ttk.Label(
+            status_frame,
+            text="⏱️ 00:00",
+            font=FONTS["code_small"],
+            foreground=COLORS["accent_cyan"],
+            background=COLORS["surface"]
+        )
+        self.lbl_stopwatch.pack(side="right", padx=(8, 4))
+
+        self.progress_bar = ttk.Progressbar(status_frame, orient="horizontal", mode="indeterminate", length=160)
         self.progress_bar.pack(side="right", padx=6)
+
+    def start_stopwatch(self, target_duration: float = 0.0) -> None:
+        """Start the digital chronometer in the status bar."""
+        self._stopwatch_start_time = time.time()
+        self._stopwatch_target_duration = target_duration
+        self._stopwatch_running = True
+        self._tick_stopwatch()
+
+    def _tick_stopwatch(self) -> None:
+        if not getattr(self, "_stopwatch_running", False):
+            return
+
+        elapsed = time.time() - self._stopwatch_start_time
+        mins, secs = divmod(int(elapsed), 60)
+        time_str = f"{mins:02d}:{secs:02d}"
+
+        if 0 < self._stopwatch_target_duration < 100000:
+            t_mins, t_secs = divmod(int(self._stopwatch_target_duration), 60)
+            display = f"⏱️ {time_str} / {t_mins:02d}:{t_secs:02d}"
+        else:
+            display = f"⏱️ {time_str}"
+
+        self.lbl_stopwatch.config(text=display)
+        self.after(200, self._tick_stopwatch)
+
+    def stop_stopwatch(self, final_text: Optional[str] = None) -> None:
+        """Stop the digital chronometer."""
+        self._stopwatch_running = False
+        if final_text:
+            self.lbl_stopwatch.config(text=final_text)
+        elif hasattr(self, "_stopwatch_start_time") and self._stopwatch_start_time > 0:
+            elapsed = time.time() - self._stopwatch_start_time
+            mins, secs = divmod(int(elapsed), 60)
+            self.lbl_stopwatch.config(text=f"⏱️ {mins:02d}:{secs:02d} (Listo)")
 
     def log(self, message: str, tag: str = "info") -> None:
         """Thread-safe logging to the live console."""
@@ -222,18 +270,22 @@ class BaseToolWindow(tk.Toplevel):
             elif state == "error":
                 self.badge_status.config(text="ERROR / FALLO", fg=COLORS["accent_red"], bg=COLORS["surface"])
                 self.progress_bar.stop()
+            elif state == "stopped":
+                self.badge_status.config(text="DETENIDO", fg=COLORS["accent_yellow"], bg=COLORS["surface"])
+                self.progress_bar.stop()
             else:
                 self.badge_status.config(text="LISTO", fg=COLORS["accent_green"], bg=COLORS["surface"])
                 self.progress_bar.stop()
         self.after(0, _update)
 
-    def execute_async(self, worker_fn: Callable) -> None:
+    def execute_async(self, worker_fn: Callable, target_duration: float = 0.0) -> None:
         """Launch background diagnostic thread to ensure UI remains completely responsive."""
         if self.worker_thread and self.worker_thread.is_alive():
             messagebox.showwarning("Análisis en curso", "Ya hay un diagnóstico en ejecución. Deténgalo antes de iniciar uno nuevo.")
             return
 
         self.stop_requested.clear()
+        self.start_stopwatch(target_duration)
         self.set_status("Ejecutando diagnóstico...", state="running")
 
         def _run_wrapper():
@@ -242,9 +294,14 @@ class BaseToolWindow(tk.Toplevel):
             except Exception as e:
                 self.log(f"[ERROR CRÍTICO] {e}")
                 self.set_status(f"Error: {e}", state="error")
+                self.stop_stopwatch("⏱️ Error")
             finally:
-                if not self.stop_requested.is_set():
+                if self.stop_requested.is_set():
+                    self.set_status("Diagnóstico detenido por el usuario.", state="stopped")
+                    self.stop_stopwatch("⏱️ Detenido")
+                else:
                     self.set_status("Análisis finalizado.", state="success")
+                    self.stop_stopwatch()
                     try:
                         from sentry.ui.notifications import notify_user
                         notify_user(
@@ -260,10 +317,10 @@ class BaseToolWindow(tk.Toplevel):
 
     def stop_analysis(self) -> None:
         """Request immediate worker thread cancellation."""
-        if self.worker_thread and self.worker_thread.is_alive():
-            self.stop_requested.set()
-            self.log("[!] Detención solicitada por el operador.")
-            self.set_status("Diagnóstico cancelado.", state="idle")
+        self.stop_requested.set()
+        self.log("[!] Detención solicitada por el operador.")
+        self.set_status("Deteniendo diagnóstico...", state="stopped")
+        self.stop_stopwatch("⏱️ Detenido")
 
     def export_results_json(self) -> None:
         """Save analysis dataset as structured JSON file."""

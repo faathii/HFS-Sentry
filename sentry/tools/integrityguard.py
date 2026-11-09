@@ -159,12 +159,22 @@ def verify_integrity(baseline_file: str) -> Dict[str, Any]:
     }
 
 
+def _is_stopped(stop_check: Optional[Any]) -> bool:
+    if stop_check is None:
+        return False
+    if hasattr(stop_check, "is_set"):
+        return stop_check.is_set()
+    if callable(stop_check):
+        return stop_check()
+    return bool(stop_check)
+
+
 def watch_integrity_timeline(
     targets: List[str],
     duration: float = 30.0,
     poll_interval: float = 1.0,
     progress_callback: Optional[Callable[[Dict[str, Any], float], None]] = None,
-    stop_check: Optional[Callable[[], bool]] = None,
+    stop_check: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Watch directory or files continuously over a time window (e.g. 30 seconds).
 
@@ -174,6 +184,8 @@ def watch_integrity_timeline(
     file_list = expand_paths(targets)
     initial_records: Dict[str, Any] = {}
     for fp in file_list:
+        if _is_stopped(stop_check):
+            break
         meta = collect_file_metadata(fp)
         if meta:
             initial_records[fp] = meta
@@ -190,6 +202,9 @@ def watch_integrity_timeline(
         now = time.time()
         remaining = max(0.0, end_time - now) if duration < 100000 and duration > 0 else 999999.0
 
+        if _is_stopped(stop_check):
+            break
+
         current_verif = verify_integrity(baseline)
         current_verif["duration_seconds"] = round(now - start_time, 1)
 
@@ -199,13 +214,17 @@ def watch_integrity_timeline(
         if duration <= 0:
             break
 
-        if stop_check and stop_check():
+        if _is_stopped(stop_check):
             break
 
         if duration < 100000 and now >= end_time:
             break
 
-        time.sleep(poll_interval)
+        if hasattr(stop_check, "wait"):
+            if stop_check.wait(timeout=poll_interval):
+                break
+        else:
+            time.sleep(poll_interval)
 
     return verify_integrity(baseline)
 

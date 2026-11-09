@@ -38,6 +38,9 @@ class CertSentryWindow(BaseToolWindow):
         self.spin_timeout.set("3.0")
         self.spin_timeout.pack(side="left", padx=(0, 16))
 
+        self.btn_stop = ttk.Button(row1, text="⏹ Detener", command=self.stop_analysis, state="disabled")
+        self.btn_stop.pack(side="right", padx=(4, 0))
+
         self.btn_run = ttk.Button(row1, text="▶ Inspeccionar Certificado", style="Primary.TButton", command=self.start_analysis)
         self.btn_run.pack(side="right", padx=4)
 
@@ -73,6 +76,8 @@ class CertSentryWindow(BaseToolWindow):
         port = int(self.spin_port.get())
         timeout = float(self.spin_timeout.get())
 
+        self.btn_run.configure(state="disabled")
+        self.btn_stop.configure(state="normal")
         self.clear_results()
         self.log(f"Iniciando inspección TLS sobre {host}:{port}...")
 
@@ -82,7 +87,6 @@ class CertSentryWindow(BaseToolWindow):
                 self.log(f"Certificado X.509 recibido de {host}. Estado: [{data['status']}]")
 
                 # Insert into table
-                days = data["days_remaining"]
                 stat_tag = "status_ok" if data["status"] == "HEALTHY" else ("status_warn" if data["status"] in ("NOTICE", "WARNING") else "status_crit")
 
                 self.after(0, lambda: self._populate_tree(data, stat_tag))
@@ -90,8 +94,16 @@ class CertSentryWindow(BaseToolWindow):
                 self._update_summary(data)
             except Exception as e:
                 self.log(f"[ERROR] Falló la negociación TLS: {e}")
+            finally:
+                self.after(0, lambda: self.btn_run.configure(state="normal"))
+                self.after(0, lambda: self.btn_stop.configure(state="disabled"))
 
         self.execute_async(_worker)
+
+    def stop_analysis(self) -> None:
+        super().stop_analysis()
+        self.btn_run.configure(state="normal")
+        self.btn_stop.configure(state="disabled")
 
     def _populate_tree(self, d: dict, stat_tag: str) -> None:
         rows = [

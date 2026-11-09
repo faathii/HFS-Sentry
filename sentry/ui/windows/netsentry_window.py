@@ -1,4 +1,4 @@
-"""Independent Desktop Window for NetSentry with Time-Window Watchdog."""
+"""Independent Desktop Window for NetSentry with responsive layout and live stopwatch."""
 
 import time
 import tkinter as tk
@@ -28,21 +28,34 @@ class NetSentryWindow(BaseToolWindow):
     icon_filename = "netsentry.png"
 
     def build_controls(self, parent: ttk.Frame) -> None:
-        """Construct target input, duration controls, port list and action buttons."""
-        self.stop_requested = False
+        """Construct target input, duration controls, port list and responsive action buttons."""
         self.is_running = False
 
+        # Row 1: Target parameters
         row1 = ttk.Frame(parent, style="Card.TFrame")
-        row1.pack(fill="x", pady=2)
+        row1.pack(fill="x", pady=(2, 6))
 
         ttk.Label(row1, text="Host / IP:", style="Card.TLabel").pack(side="left", padx=(0, 6))
         self.entry_target = ttk.Entry(row1, width=22)
         self.entry_target.insert(0, "scanme.nmap.org")
         self.entry_target.pack(side="left", padx=(0, 12))
 
-        ttk.Label(row1, text="Ventana:", style="Card.TLabel").pack(side="left", padx=(0, 6))
+        ttk.Label(row1, text="Puertos:", style="Card.TLabel").pack(side="left", padx=(0, 6))
+        self.entry_ports = ttk.Entry(row1, width=32)
+        self.entry_ports.insert(0, ",".join(str(p) for p in DEFAULT_PORTS))
+        self.entry_ports.pack(side="left", fill="x", expand=True, padx=(0, 12))
+
+        self.var_web_audit = tk.BooleanVar(value=True)
+        self.chk_web = ttk.Checkbutton(row1, text="Cabeceras OWASP (80/443)", variable=self.var_web_audit)
+        self.chk_web.pack(side="left", padx=(0, 4))
+
+        # Row 2: Action toolbar (Buttons & Banner guaranteed visible)
+        row2 = ttk.Frame(parent, style="Card.TFrame")
+        row2.pack(fill="x", pady=(2, 2))
+
+        ttk.Label(row2, text="Ventana:", style="Card.TLabel").pack(side="left", padx=(0, 6))
         self.combo_duration = ttk.Combobox(
-            row1,
+            row2,
             values=[
                 "⚡ Escaneo Instantáneo",
                 "⏱️ Ventana 30s (Watchdog de Servicios)",
@@ -55,28 +68,15 @@ class NetSentryWindow(BaseToolWindow):
         self.combo_duration.current(0)
         self.combo_duration.pack(side="left", padx=(0, 12))
 
-        self.btn_run = ttk.Button(row1, text="▶ Iniciar Escaneo", style="Primary.TButton", command=self.start_analysis)
-        self.btn_run.pack(side="right", padx=4)
-
-        self.btn_stop = ttk.Button(row1, text="⏹ Detener", command=self.stop_analysis, state="disabled")
-        self.btn_stop.pack(side="right", padx=4)
-
-        row2 = ttk.Frame(parent, style="Card.TFrame")
-        row2.pack(fill="x", pady=(6, 2))
-
-        ttk.Label(row2, text="Puertos:", style="Card.TLabel").pack(side="left", padx=(0, 6))
-        self.entry_ports = ttk.Entry(row2, width=32)
-        self.entry_ports.insert(0, ",".join(str(p) for p in DEFAULT_PORTS))
-        self.entry_ports.pack(side="left", padx=(0, 14))
-
-        self.var_web_audit = tk.BooleanVar(value=True)
-        self.chk_web = ttk.Checkbutton(row2, text="Auditar Cabeceras OWASP (80/443)", variable=self.var_web_audit)
-        self.chk_web.pack(side="left", padx=(0, 14))
-
-        # Progress banner
         self.banner_var = tk.StringVar(value="Listo para auditar puertos y seguridad perimetral.")
-        self.lbl_banner = ttk.Label(parent, textvariable=self.banner_var, font=FONTS["code_sm"], foreground=COLORS["accent_cyan"])
-        self.lbl_banner.pack(anchor="w", padx=4, pady=(0, 4))
+        self.lbl_banner = ttk.Label(row2, textvariable=self.banner_var, font=FONTS["code_small"], foreground=COLORS["accent_cyan"])
+        self.lbl_banner.pack(side="left", fill="x", expand=True, padx=(0, 10))
+
+        self.btn_stop = ttk.Button(row2, text="⏹ Detener", command=self.stop_analysis, state="disabled")
+        self.btn_stop.pack(side="right", padx=(4, 0))
+
+        self.btn_run = ttk.Button(row2, text="▶ Iniciar Escaneo", style="Primary.TButton", command=self.start_analysis)
+        self.btn_run.pack(side="right", padx=4)
 
     def build_results_table(self, parent: ttk.Frame) -> None:
         """Create structured Treeview table for discovered open ports with watchdog stability."""
@@ -152,7 +152,6 @@ class NetSentryWindow(BaseToolWindow):
         do_web = self.var_web_audit.get()
 
         self.is_running = True
-        self.stop_requested = False
         self.btn_run.configure(state="disabled")
         self.btn_stop.configure(state="normal")
 
@@ -182,7 +181,7 @@ class NetSentryWindow(BaseToolWindow):
                         interval=2.0,
                         timeout=0.5,
                         progress_callback=_on_progress,
-                        stop_check=lambda: self.stop_requested,
+                        stop_check=self.stop_requested,
                     )
                 else:
                     open_ports = scan_ports(ip, ports, timeout=0.5, workers=20)
@@ -211,7 +210,10 @@ class NetSentryWindow(BaseToolWindow):
                     "open_ports": open_ports,
                     "web_audit": web_report,
                 }
-                self.log(f"Escaneo finalizado en {elapsed}s. {len(open_ports)} puertos abiertos.")
+                if self.stop_requested.is_set():
+                    self.log(f"Escaneo detenido por el usuario. {len(open_ports)} puertos registrados.")
+                else:
+                    self.log(f"Escaneo finalizado en {elapsed}s. {len(open_ports)} puertos abiertos.")
                 self._update_summary(self.latest_results)
             except Exception as e:
                 self.log(f"[ERROR] Error durante el escaneo: {e}")
@@ -219,15 +221,18 @@ class NetSentryWindow(BaseToolWindow):
                 self.is_running = False
                 self.after(0, lambda: self.btn_run.configure(state="normal"))
                 self.after(0, lambda: self.btn_stop.configure(state="disabled"))
-                self.banner_var.set(f"✔ COMPLETADO — Escaneo y auditoría de servicios finalizados.")
+                if self.stop_requested.is_set():
+                    self.banner_var.set("⏹ Watchdog de puertos detenido por el operador.")
+                else:
+                    self.banner_var.set("✔ COMPLETADO — Escaneo y auditoría de servicios finalizados.")
 
-        self.execute_async(_worker)
+        self.execute_async(_worker, target_duration=duration)
 
     def stop_analysis(self) -> None:
-        if self.is_running:
-            self.stop_requested = True
-            self.log("[*] Solicitud de parada del watchdog enviada...")
-            self.btn_stop.configure(state="disabled")
+        super().stop_analysis()
+        self.btn_run.configure(state="normal")
+        self.btn_stop.configure(state="disabled")
+        self.banner_var.set("⏹ Watchdog de puertos detenido por el operador.")
 
     def _render_ports(self, open_ports: List[Dict[str, Any]]) -> None:
         for item in self.tree.get_children():

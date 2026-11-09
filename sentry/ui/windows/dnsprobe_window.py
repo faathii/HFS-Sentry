@@ -16,22 +16,25 @@ class DnsProbeWindow(BaseToolWindow):
     tool_title = "DnsProbe — DNS Reconnaissance & Email Defense"
     tool_category = "DNS & Email Security"
     tool_version = "1.0.0"
-    icon_filename = "hfs_sentry.png"
+    icon_filename = "dnsprobe.png"
 
     def build_controls(self, parent: ttk.Frame) -> None:
-        """Construct domain input and probe action buttons."""
+        """Construct domain input, timeout and responsive probe action buttons."""
         row1 = ttk.Frame(parent, style="Card.TFrame")
         row1.pack(fill="x", pady=2)
 
         ttk.Label(row1, text="Dominio Objetivo:", style="Card.TLabel").pack(side="left", padx=(0, 6))
-        self.entry_domain = ttk.Entry(row1, width=32)
+        self.entry_domain = ttk.Entry(row1, width=28)
         self.entry_domain.insert(0, "google.com")
-        self.entry_domain.pack(side="left", padx=(0, 16))
+        self.entry_domain.pack(side="left", fill="x", expand=True, padx=(0, 14))
 
         ttk.Label(row1, text="Timeout (s):", style="Card.TLabel").pack(side="left", padx=(0, 6))
         self.spin_timeout = ttk.Spinbox(row1, from_=1, to=15, width=5)
         self.spin_timeout.set("3.0")
         self.spin_timeout.pack(side="left", padx=(0, 16))
+
+        self.btn_stop = ttk.Button(row1, text="⏹ Detener", command=self.stop_analysis, state="disabled")
+        self.btn_stop.pack(side="right", padx=(4, 0))
 
         self.btn_run = ttk.Button(row1, text="▶ Auditar DNS & Correo", style="Primary.TButton", command=self.start_analysis)
         self.btn_run.pack(side="right", padx=4)
@@ -66,6 +69,8 @@ class DnsProbeWindow(BaseToolWindow):
             return
 
         timeout = float(self.spin_timeout.get())
+        self.btn_run.configure(state="disabled")
+        self.btn_stop.configure(state="normal")
         self.clear_results()
         self.log(f"Iniciando sondeo DNS y verificación SPF/DMARC sobre '{domain}'...")
 
@@ -98,7 +103,16 @@ class DnsProbeWindow(BaseToolWindow):
             except Exception as e:
                 self.log(f"[ERROR] Falló DnsProbe: {e}")
 
+            finally:
+                self.after(0, lambda: self.btn_run.configure(state="normal"))
+                self.after(0, lambda: self.btn_stop.configure(state="disabled"))
+
         self.execute_async(_worker)
+
+    def stop_analysis(self) -> None:
+        super().stop_analysis()
+        self.btn_run.configure(state="normal")
+        self.btn_stop.configure(state="disabled")
 
     def _update_summary(self, data: dict) -> None:
         def _render():

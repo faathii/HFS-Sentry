@@ -219,13 +219,23 @@ def evaluate_threats(collector: IncidentCollector, ssh_threshold: int = 5) -> Li
     return threats
 
 
+def _is_stopped(stop_check: Optional[Any]) -> bool:
+    if stop_check is None:
+        return False
+    if hasattr(stop_check, "is_set"):
+        return stop_check.is_set()
+    if callable(stop_check):
+        return stop_check()
+    return bool(stop_check)
+
+
 def watch_log_timeline(
     file_path: str,
     duration: float = 30.0,
     ssh_threshold: int = 5,
     poll_interval: float = 0.5,
     progress_callback: Optional[Callable[[List[Dict[str, Any]], float, int], None]] = None,
-    stop_check: Optional[Callable[[], bool]] = None,
+    stop_check: Optional[Any] = None,
 ) -> List[Dict[str, Any]]:
     """Live stream and analyze log entries in real-time over a time window (e.g. 30 seconds).
 
@@ -240,6 +250,8 @@ def watch_log_timeline(
     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
         # First read existing content
         for line in f:
+            if _is_stopped(stop_check):
+                break
             total_lines += 1
             line = line.strip()
             if not line:
@@ -272,7 +284,7 @@ def watch_log_timeline(
         if progress_callback:
             progress_callback(initial_threats, duration, total_lines)
 
-        if duration <= 0:
+        if duration <= 0 or _is_stopped(stop_check):
             return initial_threats
 
         start_time = time.time()
@@ -281,6 +293,9 @@ def watch_log_timeline(
         while True:
             now = time.time()
             remaining = max(0.0, end_time - now) if duration < 100000 else 999999.0
+
+            if _is_stopped(stop_check):
+                break
 
             line = f.readline()
             if line:
@@ -316,9 +331,13 @@ def watch_log_timeline(
                 if progress_callback:
                     current_threats = evaluate_threats(collector, ssh_threshold)
                     progress_callback(current_threats, remaining, total_lines)
-                time.sleep(poll_interval)
+                if hasattr(stop_check, "wait"):
+                    if stop_check.wait(timeout=poll_interval):
+                        break
+                else:
+                    time.sleep(poll_interval)
 
-            if stop_check and stop_check():
+            if _is_stopped(stop_check):
                 break
 
             if duration < 100000 and now >= end_time:

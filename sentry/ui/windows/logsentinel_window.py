@@ -1,4 +1,4 @@
-"""Independent Desktop Window for LogSentinel with Live Tail Observation Window."""
+"""Independent Desktop Window for LogSentinel with responsive layout and live stopwatch."""
 
 import os
 import time
@@ -26,16 +26,16 @@ class LogSentinelWindow(BaseToolWindow):
     icon_filename = "logsentinel.png"
 
     def build_controls(self, parent: ttk.Frame) -> None:
-        """Construct log file picker, duration controls, threshold and analysis buttons."""
-        self.stop_requested = False
+        """Construct log file picker, duration controls, threshold and responsive action buttons."""
         self.is_running = False
         self.current_threats: List[Dict[str, Any]] = []
 
+        # Row 1: Target parameters and filters
         row1 = ttk.Frame(parent, style="Card.TFrame")
-        row1.pack(fill="x", pady=2)
+        row1.pack(fill="x", pady=(2, 6))
 
         ttk.Label(row1, text="Archivo Log:", style="Card.TLabel").pack(side="left", padx=(0, 6))
-        self.entry_file = ttk.Entry(row1, width=38)
+        self.entry_file = ttk.Entry(row1, width=28)
         default_log = os.path.join("examples", "sample_auth.log")
         if os.path.isfile(default_log):
             self.entry_file.insert(0, default_log)
@@ -54,7 +54,7 @@ class LogSentinelWindow(BaseToolWindow):
                 "🔄 Monitoreo Continuo (Live Tail)",
             ],
             state="readonly",
-            width=26,
+            width=24,
         )
         self.combo_duration.current(0)
         self.combo_duration.pack(side="left", padx=(0, 14))
@@ -64,29 +64,25 @@ class LogSentinelWindow(BaseToolWindow):
         self.spin_thresh.set("5")
         self.spin_thresh.pack(side="left", padx=(0, 6))
 
+        # Row 2: Action toolbar (Buttons & Banner guaranteed visible)
         row2 = ttk.Frame(parent, style="Card.TFrame")
-        row2.pack(fill="x", pady=(6, 2))
+        row2.pack(fill="x", pady=(2, 2))
 
-        btn_sample_access = ttk.Button(
-            row2, text="Cargar Access Log de Ejemplo", command=self._load_sample_access
-        )
-        btn_sample_access.pack(side="left", padx=(0, 10))
+        btn_sample = ttk.Button(row2, text="Muestra Access.log", command=self._load_sample_access)
+        btn_sample.pack(side="left", padx=(0, 8))
 
-        self.btn_gen_fw = ttk.Button(
-            row2, text="🛡️ Generar Script Firewall (.sh)", command=self.export_firewall_script
-        )
-        self.btn_gen_fw.pack(side="left", padx=(0, 10))
+        self.btn_gen_fw = ttk.Button(row2, text="🛡️ Script Firewall (.sh)", command=self.export_firewall_script)
+        self.btn_gen_fw.pack(side="left", padx=(0, 12))
+
+        self.banner_var = tk.StringVar(value="Listo para auditar registros del sistema.")
+        self.lbl_banner = ttk.Label(row2, textvariable=self.banner_var, font=FONTS["code_small"], foreground=COLORS["accent_cyan"])
+        self.lbl_banner.pack(side="left", fill="x", expand=True, padx=(0, 10))
 
         self.btn_stop = ttk.Button(row2, text="⏹ Detener", command=self.stop_analysis, state="disabled")
-        self.btn_stop.pack(side="right", padx=4)
+        self.btn_stop.pack(side="right", padx=(4, 0))
 
         self.btn_run = ttk.Button(row2, text="▶ Analizar / Vigilar Log", style="Primary.TButton", command=self.start_analysis)
         self.btn_run.pack(side="right", padx=4)
-
-        # Progress banner
-        self.banner_var = tk.StringVar(value="Listo para auditar registros del sistema.")
-        self.lbl_banner = ttk.Label(parent, textvariable=self.banner_var, font=FONTS["code_sm"], foreground=COLORS["accent_cyan"])
-        self.lbl_banner.pack(anchor="w", padx=4, pady=(0, 4))
 
     def build_results_table(self, parent: ttk.Frame) -> None:
         """Create Treeview table for detected intrusion threats."""
@@ -157,7 +153,6 @@ class LogSentinelWindow(BaseToolWindow):
         ssh_thresh = int(self.spin_thresh.get())
 
         self.is_running = True
-        self.stop_requested = False
         self.btn_run.configure(state="disabled")
         self.btn_stop.configure(state="normal")
 
@@ -182,7 +177,7 @@ class LogSentinelWindow(BaseToolWindow):
                         duration=duration,
                         ssh_threshold=ssh_thresh,
                         progress_callback=_on_progress,
-                        stop_check=lambda: self.stop_requested,
+                        stop_check=self.stop_requested,
                     )
                 else:
                     collector = analyze_log_file(path)
@@ -197,7 +192,10 @@ class LogSentinelWindow(BaseToolWindow):
                     "total_threats": len(threats),
                     "threats": threats,
                 }
-                self.log(f"Análisis completado en {elapsed}s. {len(threats)} vectores hostiles identificados.")
+                if self.stop_requested.is_set():
+                    self.log(f"Vigilancia de log detenida por el usuario. {len(threats)} amenazas correlacionadas.")
+                else:
+                    self.log(f"Análisis completado en {elapsed}s. {len(threats)} vectores hostiles identificados.")
                 self.after(0, self._render_threats)
                 self._update_summary(self.latest_results, elapsed)
             except Exception as e:
@@ -206,15 +204,18 @@ class LogSentinelWindow(BaseToolWindow):
                 self.is_running = False
                 self.after(0, lambda: self.btn_run.configure(state="normal"))
                 self.after(0, lambda: self.btn_stop.configure(state="disabled"))
-                self.banner_var.set(f"✔ COMPLETADO — {len(self.current_threats)} atacantes correlacionados en el registro.")
+                if self.stop_requested.is_set():
+                    self.banner_var.set("⏹ Vigilante de log detenido por el operador.")
+                else:
+                    self.banner_var.set(f"✔ COMPLETADO — {len(self.current_threats)} atacantes correlacionados en el registro.")
 
-        self.execute_async(_worker)
+        self.execute_async(_worker, target_duration=duration)
 
     def stop_analysis(self) -> None:
-        if self.is_running:
-            self.stop_requested = True
-            self.log("[*] Solicitud de detención del vigilante de log...")
-            self.btn_stop.configure(state="disabled")
+        super().stop_analysis()
+        self.btn_run.configure(state="normal")
+        self.btn_stop.configure(state="disabled")
+        self.banner_var.set("⏹ Vigilante de log detenido por el operador.")
 
     def _render_threats(self) -> None:
         for item in self.tree.get_children():

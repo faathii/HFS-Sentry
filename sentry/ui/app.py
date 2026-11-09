@@ -194,15 +194,15 @@ class SentrySuiteApp(tk.Tk):
                 "name": "DnsProbe",
                 "version": "1.0.0",
                 "category": "DNS & EMAIL",
-                "icon": "hfs_sentry.png",
+                "icon": "dnsprobe.png",
                 "desc": "Reconocimiento y auditoría de registros DNS públicos y defensa contra suplantación de correo electrónico (verificación estricta de políticas SPF, DMARC y validación de firma DNSSEC).",
             },
             {
                 "id": "trafficsentry",
                 "name": "TrafficSentry",
-                "version": "1.0.0",
+                "version": "1.1.0",
                 "category": "HOST & SOCKETS",
-                "icon": "subnetsweep.png",
+                "icon": "trafficsentry.png",
                 "desc": "Auditoría de conexiones activas del sistema operativo y detección de daemons o servicios sensibles expuestos a 0.0.0.0 (todas las interfaces) en lugar de localhost.",
             },
         ]
