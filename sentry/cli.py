@@ -50,6 +50,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="List all registered tools and technical modules.",
     )
+    parser.add_argument(
+        "-i", "--interactive",
+        action="store_true",
+        help="Launch interactive security menu mode.",
+    )
 
     subparsers = parser.add_subparsers(
         dest="tool_name",
@@ -83,12 +88,66 @@ def print_tool_catalogue() -> None:
     print(f"\n Run any tool using: {bold('python sentry.py <tool> --help')}\n")
 
 
+def run_interactive_menu(parser: argparse.ArgumentParser) -> int:
+    """Run an interactive prompt menu to easily invoke any tool."""
+    print(BANNER)
+    tools = list_tools()
+    while True:
+        print("\n" + "=" * 60)
+        print(f" {bold('HFS-Sentry Interactive Console')}")
+        print("=" * 60)
+        for idx, t in enumerate(tools, 1):
+            print(f"  [{cyan(str(idx))}] {bold(t.name):<18} ({t.category}) - {t.description}")
+        print(f"  [{yellow('0')}] Exit Console")
+        print("=" * 60)
+
+        try:
+            choice = input(f"\nSelect a tool [0-{len(tools)}]: ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print("\nExiting.")
+            return 0
+
+        if choice in ("0", "q", "exit"):
+            print("Session ended.")
+            return 0
+
+        if not choice.isdigit() or int(choice) < 1 or int(choice) > len(tools):
+            print(red("[!] Invalid option. Please choose a valid tool number."))
+            continue
+
+        selected_tool = tools[int(choice) - 1]
+        print(f"\n---> {bold(selected_tool.name.upper())} ({selected_tool.description})")
+        print(f"Enter arguments for {bold(selected_tool.name)} (or press Enter for --help):")
+        try:
+            user_args = input(f"{selected_tool.name} > ").strip()
+        except (KeyboardInterrupt, EOFError):
+            continue
+
+        cmd_argv = [selected_tool.name]
+        if user_args:
+            cmd_argv.extend(user_args.split())
+        else:
+            cmd_argv.append("--help")
+
+        try:
+            parsed = parser.parse_args(cmd_argv)
+            selected_tool.run(parsed)
+        except SystemExit:
+            pass
+        except Exception as e:
+            print(red(f"[!] Error: {e}"))
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     """Entry point for CLI execution."""
     parser = build_parser()
 
     if argv is None:
         argv = sys.argv[1:]
+
+    # If --interactive is requested
+    if "-i" in argv or "--interactive" in argv:
+        return run_interactive_menu(parser)
 
     # If no arguments provided, show banner and available tools
     if not argv:

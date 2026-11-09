@@ -52,12 +52,12 @@
 ## 🧰 Catálogo de Herramientas Integradas
 
 | Herramienta | Categoría | Propósito Técnico | Salida / Capacidad Clave |
-| :--- | :--- | :--- | :--- |
-| **`netsentry`** | Red & Web | Escáner concurrente de puertos TCP, *banner grabbing* ligero y auditoría de las 6 cabeceras de seguridad OWASP (HSTS, CSP, X-Frame-Options, etc.). | Reporte tabular con calificación (A, B, F) y alerta de puertos de texto plano. |
-| **`logsentinel`** | Forense & IDS | Analizador de registros (`auth.log`, `access.log`), detección de fuerza bruta SSH, *Path Traversal* y escáneres web maliciosos. | Reporte de incidentes y script ejecutable `block_threats.sh` con reglas `ufw`/`iptables`. |
-| **`certsentry`** | Criptografía | Inspector preventivo de expiración de certificados SSL/TLS X.509, cadena de confianza y verificación de protocolos obsoletos (TLS 1.0/1.1). | Semáforo de días restantes hasta caducidad y verificación de cifrado. |
-| **`subnetsweep`** | Infraestructura | Descubridor concurrente de dispositivos en subredes CIDR (/24) mediante sondas TCP/ICMP y mapeo de fabricantes según prefijo OUI IEEE. | Inventario de hosts activos, direcciones MAC y fabricantes detectados. |
-| **`integrityguard`** | HIDS / Forense | Monitor de Integridad de Archivos (FIM) con firmas criptográficas SHA-256 para prevenir alteraciones no autorizadas en archivos del sistema. | Detección en milisegundos de modificaciones, eliminaciones y archivos sospechosos. |
+| :---: | :--- | :--- | :--- |
+| <img src="assets/logos/netsentry.png" width="52"><br>**`netsentry`** | Red & Web | Escáner concurrente de puertos TCP, *banner grabbing* ligero y auditoría de las 6 cabeceras de seguridad OWASP (HSTS, CSP, X-Frame-Options, etc.). | Reporte tabular con calificación (A, B, F) y alerta de puertos de texto plano. |
+| <img src="assets/logos/logsentinel.png" width="52"><br>**`logsentinel`** | Forense & IDS | Analizador de registros (`auth.log`, `access.log`), detección de fuerza bruta SSH, *Path Traversal* y escáneres web maliciosos. | Reporte de incidentes y script ejecutable `block_threats.sh` con reglas `ufw`/`iptables`. |
+| <img src="assets/logos/certsentry.png" width="52"><br>**`certsentry`** | Criptografía | Inspector preventivo de expiración de certificados SSL/TLS X.509, cadena de confianza y verificación de protocolos obsoletos (TLS 1.0/1.1). | Semáforo de días restantes hasta caducidad y verificación de cifrado. |
+| <img src="assets/logos/subnetsweep.png" width="52"><br>**`subnetsweep`** | Infraestructura | Descubridor concurrente de dispositivos en subredes CIDR (/24) mediante sondas TCP/ICMP y mapeo de fabricantes según prefijo OUI IEEE. | Inventario de hosts activos, direcciones MAC y fabricantes detectados. |
+| <img src="assets/logos/integrityguard.png" width="52"><br>**`integrityguard`** | HIDS / Forense | Monitor de Integridad de Archivos (FIM) con firmas criptográficas SHA-256 para prevenir alteraciones no autorizadas en archivos del sistema. | Detección en milisegundos de modificaciones, eliminaciones y archivos sospechosos. |
 
 ---
 

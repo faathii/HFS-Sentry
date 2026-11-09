@@ -25,7 +25,7 @@ class TestRegistry(unittest.TestCase):
     def test_core_tools_registered(self):
         # Ensure all 5 official tools are registered
         reg = get_tool_registry()
-        expected = ["netsentry", "logsentinel", "certsentry", "subnetsweep", "integrityguard"]
+        expected = ["netsentry", "logsentinel", "certsentry", "subnetsweep", "integrityguard", "dnsprobe"]
         for tool_name in expected:
             self.assertIn(tool_name, reg, f"Expected {tool_name} to be in registry")
             tool = get_tool(tool_name)

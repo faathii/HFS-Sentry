@@ -7,6 +7,7 @@ from sentry.tools.logsentinel import LogSentinelTool
 from sentry.tools.certsentry import CertSentryTool
 from sentry.tools.subnetsweep import SubnetSweepTool
 from sentry.tools.integrityguard import IntegrityGuardTool
+from sentry.tools.dnsprobe import DnsProbeTool
 
 __all__ = [
     "NetSentryTool",
@@ -14,5 +15,5 @@ __all__ = [
     "CertSentryTool",
     "SubnetSweepTool",
     "IntegrityGuardTool",
+    "DnsProbeTool",
 ]
-
