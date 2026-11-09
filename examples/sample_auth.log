@@ -5,3 +5,4 @@ Nov  9 10:00:07 webserver sshd[1237]: Failed password for invalid user ubuntu fr
 Nov  9 10:00:09 webserver sshd[1238]: Failed password for invalid user oracle from 198.51.100.42 port 45126 ssh2
 Nov  9 10:00:11 webserver sshd[1239]: Failed password for invalid user postgres from 198.51.100.42 port 45127 ssh2
 Nov  9 10:05:00 webserver sshd[1250]: Accepted publickey for operator from 192.168.1.50 port 51234 ssh2
+

@@ -43,3 +43,4 @@ sentry = "sentry.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["sentry*"]
+

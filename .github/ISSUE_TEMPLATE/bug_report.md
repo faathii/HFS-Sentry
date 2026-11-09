@@ -22,3 +22,4 @@ Qué debería haber sucedido.
 - Sistema Operativo (Linux, Windows, macOS):
 - Versión de Python (`python --version`):
 - Versión de HFS-Sentry:
+

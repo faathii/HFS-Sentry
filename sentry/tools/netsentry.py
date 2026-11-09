@@ -347,3 +347,4 @@ if __name__ == "__main__":
     tool = NetSentryTool()
     tool.register_arguments(parser)
     sys.exit(tool.run(parser.parse_args()))
+

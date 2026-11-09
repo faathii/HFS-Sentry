@@ -338,3 +338,4 @@ if __name__ == "__main__":
     tool = LogSentinelTool()
     tool.register_arguments(parser)
     sys.exit(tool.run(parser.parse_args()))
+

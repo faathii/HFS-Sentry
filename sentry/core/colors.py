@@ -42,3 +42,4 @@ def bold(text: str) -> str:
 
 def dim(text: str) -> str:
     return _wrap("2", text)
+

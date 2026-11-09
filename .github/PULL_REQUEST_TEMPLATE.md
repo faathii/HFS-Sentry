@@ -13,3 +13,4 @@ Closes # (si aplica)
 - [ ] Si es una nueva herramienta, hereda de `BaseTool` y usa `@register_tool`.
 - [ ] Se han añadido pruebas en `tests/` y pasan con `python -m unittest discover tests`.
 - [ ] El código respeta las convenciones de tipado y estilo.
+

@@ -29,3 +29,4 @@ def get_tool_registry() -> Dict[str, BaseTool]:
 def list_tools() -> List[BaseTool]:
     """Return list of all registered tools sorted by name."""
     return sorted(_REGISTRY.values(), key=lambda t: t.name)
+

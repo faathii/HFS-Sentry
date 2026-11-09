@@ -18,3 +18,4 @@ Ejemplo: `dnsprobe`, `whoissentry`
 
 **Salida Estimada / Expected Output**
 Formato esperado en consola y en `--json`.
+

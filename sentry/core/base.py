@@ -33,3 +33,4 @@ class BaseTool(ABC):
             "version": self.version,
             "category": self.category,
         }
+
