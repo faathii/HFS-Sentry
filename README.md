@@ -58,6 +58,7 @@
 | <img src="assets/logos/certsentry.png" width="52"><br>**`certsentry`** | Criptografía | Inspector preventivo de expiración de certificados SSL/TLS X.509, cadena de confianza y verificación de protocolos obsoletos (TLS 1.0/1.1). | Semáforo de días restantes hasta caducidad y verificación de cifrado. |
 | <img src="assets/logos/subnetsweep.png" width="52"><br>**`subnetsweep`** | Infraestructura | Descubridor concurrente de dispositivos en subredes CIDR (/24) mediante sondas TCP/ICMP y mapeo de fabricantes según prefijo OUI IEEE. | Inventario de hosts activos, direcciones MAC y fabricantes detectados. |
 | <img src="assets/logos/integrityguard.png" width="52"><br>**`integrityguard`** | HIDS / Forense | Monitor de Integridad de Archivos (FIM) con firmas criptográficas SHA-256 para prevenir alteraciones no autorizadas en archivos del sistema. | Detección en milisegundos de modificaciones, eliminaciones y archivos sospechosos. |
+| <img src="assets/logos/hfs_sentry.png" width="52"><br>**`dnsprobe`** | DNS & Email | Auditoría de registros DNS (A, AAAA, MX, TXT, CAA) y postura de seguridad de correo (validación de SPF, DMARC y DNSSEC contra spoofing). | Calificación de seguridad de correo electrónico (HARDENED / VULNERABLE) y alertas de suplantación. |
 
 ---
 
@@ -137,6 +138,22 @@ python sentry.py integrityguard --init -t /etc/passwd /etc/shadow /etc/hosts -b 
 
 # 2. Verificar integridad periódicamente contra la línea base
 python sentry.py integrityguard --check -b mi_baseline.json
+```
+
+### 6. DnsProbe — Reconocimiento DNS & Seguridad de Correo (SPF, DMARC, DNSSEC)
+```bash
+# Inspección de registros y postura contra suplantación (spoofing)
+python sentry.py dnsprobe google.com
+
+# Salida en JSON estructurado para auditorías automatizadas
+python sentry.py dnsprobe midominio.com --json
+```
+
+### 🎮 Modo Consola Interactiva
+Si prefieres un menú visual interactivo sin tener que recordar argumentos CLI:
+```bash
+python sentry.py -i
+# o: python sentry.py --interactive
 ```
 
 ---
