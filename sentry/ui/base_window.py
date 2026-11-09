@@ -49,6 +49,7 @@ class BaseToolWindow(tk.Toplevel):
         # Keyboard shortcuts
         self.bind("<Control-w>", lambda e: self.destroy())
         self.bind("<Control-s>", lambda e: self.export_results_json())
+        self.bind("<Control-h>", lambda e: self.export_report_html())
         self.bind("<F5>", lambda e: self.start_analysis())
         self.bind("<Escape>", lambda e: self.stop_analysis())
 
@@ -62,6 +63,7 @@ class BaseToolWindow(tk.Toplevel):
         file_menu = tk.Menu(menubar, tearoff=0, bg=COLORS["bg_card"], fg=COLORS["text_primary"])
         file_menu.add_command(label="Nuevo Análisis\tCtrl+N", command=self.clear_results)
         file_menu.add_command(label="Exportar Resultados (JSON)\tCtrl+S", command=self.export_results_json)
+        file_menu.add_command(label="Exportar Informe Ejecutivo (HTML)\tCtrl+H", command=self.export_report_html)
         file_menu.add_command(label="Exportar Informe (Texto)\tCtrl+E", command=self.export_report_txt)
         file_menu.add_separator()
         file_menu.add_command(label="Cerrar Ventana\tCtrl+W", command=self.destroy)
@@ -270,6 +272,25 @@ class BaseToolWindow(tk.Toplevel):
                 json.dump(self.latest_results, f, indent=2)
             messagebox.showinfo("Exportación Exitosa", f"Resultados guardados correctamente en:\n{path}")
 
+    def export_report_html(self) -> None:
+        """Generate and save professional self-contained executive HTML audit report."""
+        if not self.latest_results:
+            messagebox.showinfo("Sin Datos", "Primero realice un diagnóstico para exportar el informe ejecutivo.")
+            return
+
+        from sentry.core.report import generate_html_report
+        path = filedialog.asksaveasfilename(
+            defaultextension=".html",
+            filetypes=[("Informes HTML", "*.html"), ("Todos los archivos", "*.*")],
+            title=f"Exportar Informe Ejecutivo HTML - {self.tool_title}",
+            initialfile=f"{self.tool_id}_audit_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+        )
+        if path:
+            html_content = generate_html_report(self.latest_results, title=f"Auditoría Técnica — {self.tool_title}")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(html_content)
+            messagebox.showinfo("Informe HTML Listo", f"Informe ejecutivo exportado exitosamente:\n{path}")
+
     def export_report_txt(self) -> None:
         """Export raw terminal console log to text file."""
         content = self.console_text.get("1.0", "end").strip()
@@ -335,3 +356,4 @@ class BaseToolWindow(tk.Toplevel):
 
     def clear_results(self) -> None:
         raise NotImplementedError
+

@@ -55,4 +55,5 @@ coverage.xml
 # Generated runtime files from tools
 block_threats.sh
 *.baseline.json
+*.lnk
 
