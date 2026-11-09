@@ -25,3 +25,4 @@ USER sentryuser
 
 ENTRYPOINT ["hfs-sentry"]
 CMD ["--list"]
+

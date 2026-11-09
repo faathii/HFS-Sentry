@@ -6,6 +6,7 @@ Zero external dependencies (Python 3 standard library only).
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import datetime
 import ipaddress
 import json
 import os
@@ -15,7 +16,7 @@ import socket
 import subprocess
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from sentry.core.base import BaseTool
 from sentry.core.colors import bold, cyan, green, yellow
@@ -191,6 +192,79 @@ def sweep_subnet(cidr: str, workers: int = 40, use_icmp: bool = True) -> List[Di
     return active_hosts
 
 
+def sweep_subnet_timeline(
+    cidr: str,
+    duration: float = 30.0,
+    interval: float = 5.0,
+    workers: int = 40,
+    use_icmp: bool = True,
+    progress_callback: Optional[Callable[[List[Dict[str, Any]], float], None]] = None,
+    stop_check: Optional[Callable[[], bool]] = None,
+) -> List[Dict[str, Any]]:
+    """Perform continuous or time-window network discovery over time (e.g. 30 seconds).
+
+    Detects transient devices connecting or disconnecting within the observation period.
+    """
+    cumulative: Dict[str, Dict[str, Any]] = {}
+    start_time = time.time()
+    end_time = start_time + duration if duration > 0 else start_time
+
+    while True:
+        now = time.time()
+        remaining = max(0.0, end_time - now) if duration > 0 else 0.0
+
+        current_hosts = sweep_subnet(cidr=cidr, workers=workers, use_icmp=use_icmp)
+        current_ips = {h["ip"] for h in current_hosts}
+        now_iso = datetime.datetime.now().strftime("%H:%M:%S")
+
+        for h in current_hosts:
+            ip = h["ip"]
+            if ip not in cumulative:
+                cumulative[ip] = {
+                    **h,
+                    "first_seen": now_iso,
+                    "last_seen": now_iso,
+                    "duration_sec": 0.0,
+                    "status": "ACTIVO",
+                    "is_new": len(cumulative) > 0,
+                    "_start_ts": now,
+                    "_last_ts": now,
+                }
+            else:
+                entry = cumulative[ip]
+                entry["last_seen"] = now_iso
+                entry["status"] = "ACTIVO"
+                entry["_last_ts"] = now
+                entry["duration_sec"] = round(now - entry["_start_ts"], 1)
+                # Update MAC / vendor if resolved later
+                if entry.get("mac") in ("-", "", None) and h.get("mac"):
+                    entry["mac"] = h["mac"]
+                    entry["vendor"] = h.get("vendor", entry.get("vendor"))
+
+        for ip, entry in cumulative.items():
+            if ip not in current_ips and entry["status"] == "ACTIVO":
+                entry["status"] = "INACTIVO"
+                entry["duration_sec"] = round(entry["_last_ts"] - entry["_start_ts"], 1)
+
+        result_list = sorted(cumulative.values(), key=lambda x: ipaddress.ip_address(x["ip"]))
+
+        if progress_callback:
+            progress_callback(result_list, remaining)
+
+        if duration <= 0:
+            break
+
+        if stop_check and stop_check():
+            break
+
+        if now >= end_time:
+            break
+
+        time.sleep(min(interval, max(0.5, end_time - now)))
+
+    return result_list
+
+
 def print_cli_report(hosts: List[Dict[str, Any]], cidr: str, duration: float) -> None:
     """Print formatted SubnetSweep report."""
     print("=" * 76)
@@ -225,12 +299,27 @@ class SubnetSweepTool(BaseTool):
         parser.add_argument("cidr", help="Target CIDR subnet (e.g. 192.168.1.0/24, 10.0.0.0/24)")
         parser.add_argument("-t", "--threads", type=int, default=40, help="Worker threads (default: 40)")
         parser.add_argument("--no-icmp", action="store_true", help="Disable ICMP ping (use TCP probes only)")
+        parser.add_argument(
+            "-d", "--duration",
+            type=float,
+            default=0.0,
+            help="Observation window in seconds (e.g. 30.0 for 30s monitoring; default: 0 = instant snapshot)",
+        )
         parser.add_argument("--json", action="store_true", help="Output results in JSON format")
 
     def run(self, args: argparse.Namespace) -> int:
         start_t = time.time()
         try:
-            hosts = sweep_subnet(args.cidr, workers=args.threads, use_icmp=not args.no_icmp)
+            if args.duration > 0:
+                print(f"[*] Iniciando ventana de barrido de red de {args.duration}s en {args.cidr}...")
+                hosts = sweep_subnet_timeline(
+                    cidr=args.cidr,
+                    duration=args.duration,
+                    workers=args.threads,
+                    use_icmp=not args.no_icmp,
+                )
+            else:
+                hosts = sweep_subnet(args.cidr, workers=args.threads, use_icmp=not args.no_icmp)
             duration = round(time.time() - start_t, 2)
 
             if args.json:

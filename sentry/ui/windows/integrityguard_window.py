@@ -1,56 +1,75 @@
-"""Independent Desktop Window for IntegrityGuard (FIM)."""
+"""Independent Desktop Window for IntegrityGuard (FIM) with Time-Window Watcher."""
 
+import json
 import os
 import platform
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from sentry.tools.integrityguard import (
     DEFAULT_TARGET_PATHS,
     collect_file_metadata,
     generate_baseline,
     verify_integrity,
+    watch_integrity_timeline,
 )
 from sentry.ui.base_window import BaseToolWindow
 from sentry.ui.theme import COLORS, FONTS
 
 
 class IntegrityGuardWindow(BaseToolWindow):
-    """IntegrityGuard Independent GUI Application."""
+    """IntegrityGuard Independent GUI Application with Real-Time Sentinel."""
 
     tool_id = "integrityguard"
     tool_title = "IntegrityGuard — Host File Integrity Monitor (FIM)"
     tool_category = "HIDS & Forensics"
-    tool_version = "1.0.0"
+    tool_version = "1.1.0"
     icon_filename = "integrityguard.png"
 
     def build_controls(self, parent: ttk.Frame) -> None:
-        """Construct baseline file picker, target manager and check buttons."""
+        """Construct baseline file picker, target manager, duration controls and check buttons."""
+        self.stop_requested = False
+        self.is_running = False
+
         row1 = ttk.Frame(parent, style="Card.TFrame")
         row1.pack(fill="x", pady=2)
 
         ttk.Label(row1, text="Base de Datos Baseline (JSON):", style="Card.TLabel").pack(side="left", padx=(0, 6))
-        self.entry_baseline = ttk.Entry(row1, width=32)
+        self.entry_baseline = ttk.Entry(row1, width=28)
         self.entry_baseline.insert(0, "sentry_baseline.json")
-        self.entry_baseline.pack(side="left", padx=(0, 16))
+        self.entry_baseline.pack(side="left", padx=(0, 8))
 
         btn_browse_base = ttk.Button(row1, text="📁 Examinar...", command=self._browse_baseline)
-        btn_browse_base.pack(side="left", padx=(0, 16))
+        btn_browse_base.pack(side="left", padx=(0, 14))
 
-        # Action Buttons
+        ttk.Label(row1, text="Ventana:", style="Card.TLabel").pack(side="left", padx=(0, 6))
+        self.combo_duration = ttk.Combobox(
+            row1,
+            values=[
+                "⚡ Verificación Instantánea",
+                "⏱️ Ventana 30s (Centinela Activo)",
+                "⏱️ Ventana 60s",
+                "🔄 Monitoreo Continuo",
+            ],
+            state="readonly",
+            width=26,
+        )
+        self.combo_duration.current(0)
+        self.combo_duration.pack(side="left", padx=(0, 14))
+
+        self.btn_stop = ttk.Button(row1, text="⏹ Detener", command=self.stop_analysis, state="disabled")
+        self.btn_stop.pack(side="right", padx=4)
+
         self.btn_check = ttk.Button(row1, text="🛡️ Verificar Integridad", style="Primary.TButton", command=self.start_analysis)
         self.btn_check.pack(side="right", padx=4)
 
-        self.btn_init = ttk.Button(row1, text="➕ Crear Línea Base (SHA-256)", command=self._create_baseline)
-        self.btn_init.pack(side="right", padx=4)
-
         row2 = ttk.Frame(parent, style="Card.TFrame")
-        row2.pack(fill="x", pady=(8, 2))
+        row2.pack(fill="x", pady=(6, 2))
 
-        ttk.Label(row2, text="Archivos / Directorios a Vigilar:", style="Card.TLabel").pack(side="left", padx=(0, 6))
-        self.entry_target = ttk.Entry(row2, width=45)
-        # Default target
+        ttk.Label(row2, text="Objetivos a Vigilar:", style="Card.TLabel").pack(side="left", padx=(0, 6))
+        self.entry_target = ttk.Entry(row2, width=38)
         sys_os = platform.system()
         def_target = DEFAULT_TARGET_PATHS.get(sys_os, [DEFAULT_TARGET_PATHS["Linux"][0]])[0]
         self.entry_target.insert(0, def_target)
@@ -61,6 +80,14 @@ class IntegrityGuardWindow(BaseToolWindow):
 
         btn_add_dir = ttk.Button(row2, text="+ Carpeta", command=self._add_dir_target)
         btn_add_dir.pack(side="left", padx=2)
+
+        self.btn_init = ttk.Button(row2, text="➕ Crear Línea Base (SHA-256)", command=self._create_baseline)
+        self.btn_init.pack(side="right", padx=4)
+
+        # Progress banner
+        self.banner_var = tk.StringVar(value="Listo para auditar la integridad de archivos críticos.")
+        self.lbl_banner = ttk.Label(parent, textvariable=self.banner_var, font=FONTS["code_sm"], foreground=COLORS["accent_cyan"])
+        self.lbl_banner.pack(anchor="w", padx=4, pady=(0, 4))
 
     def build_results_table(self, parent: ttk.Frame) -> None:
         """Create Treeview table for file status and cryptographic hashes."""
@@ -91,108 +118,167 @@ class IntegrityGuardWindow(BaseToolWindow):
 
     def _browse_baseline(self) -> None:
         path = filedialog.askopenfilename(
-            title="Seleccionar Base de Datos de Integridad (JSON)",
-            filetypes=[("Archivos JSON", "*.json"), ("Todos los archivos", "*.*")]
+            title="Seleccionar Base de Datos Baseline",
+            filetypes=[("JSON files (*.json)", "*.json"), ("All files", "*.*")],
         )
         if path:
             self.entry_baseline.delete(0, "end")
             self.entry_baseline.insert(0, path)
 
     def _add_file_target(self) -> None:
-        path = filedialog.askopenfilename(title="Seleccionar Archivo para Línea Base")
-        if path:
+        f = filedialog.askopenfilename(title="Seleccionar Archivo para Monitorear")
+        if f:
             self.entry_target.delete(0, "end")
-            self.entry_target.insert(0, path)
+            self.entry_target.insert(0, f)
 
     def _add_dir_target(self) -> None:
-        path = filedialog.askdirectory(title="Seleccionar Carpeta para Línea Base")
-        if path:
+        d = filedialog.askdirectory(title="Seleccionar Carpeta para Monitorear Recursivamente")
+        if d:
             self.entry_target.delete(0, "end")
-            self.entry_target.insert(0, path)
+            self.entry_target.insert(0, d)
+
+    def _get_selected_duration(self) -> float:
+        val = self.combo_duration.get()
+        if "30s" in val:
+            return 30.0
+        elif "60s" in val:
+            return 60.0
+        elif "Continuo" in val:
+            return 999999.0
+        return 0.0
 
     def _create_baseline(self) -> None:
         target = self.entry_target.get().strip()
         baseline_file = self.entry_baseline.get().strip()
-
-        if not target:
-            messagebox.showerror("Error", "Indique un archivo o directorio para generar la línea base.")
+        if not target or not baseline_file:
+            messagebox.showerror("Error", "Especifique el objetivo y el archivo de base de datos JSON.")
             return
 
-        self.clear_results()
-        self.log(f"Generando firmas SHA-256 para '{target}' en '{baseline_file}'...")
-
-        def _worker():
-            try:
-                data = generate_baseline([target], baseline_file)
-                self.log(f"[✔] Línea base creada exitosamente: {data['total_files']} archivos firmados.")
-                for path, meta in data.get("files", {}).items():
-                    self.after(0, lambda p=path, m=meta: self.tree.insert(
-                        "", "end", values=(p, "LÍNEA BASE", m["sha256"][:24] + "...", f"{m['size_bytes']} B", m["mtime_iso"][:19]), tags=("status_intact",)
-                    ))
-                messagebox.showinfo("Línea Base Lista", f"Línea base generada correctamente con {data['total_files']} archivos.")
-            except Exception as e:
-                self.log(f"[ERROR] No se pudo crear la línea base: {e}")
-
-        self.execute_async(_worker)
+        self.log(f"Generando firmas criptográficas SHA-256 para '{target}'...")
+        try:
+            baseline = generate_baseline([target], baseline_file)
+            count = len(baseline["files"])
+            self.log(f"[ÉXITO] Línea base creada: {count} archivos sellados en '{baseline_file}'.")
+            messagebox.showinfo("Línea Base Creada", f"Se han sellado criptográficamente {count} archivos en:\n{baseline_file}")
+        except Exception as e:
+            self.log(f"[ERROR] Error al crear baseline: {e}")
+            messagebox.showerror("Error", str(e))
 
     def start_analysis(self) -> None:
-        """Verify integrity against baseline snapshot."""
-        baseline_file = self.entry_baseline.get().strip()
-        if not os.path.isfile(baseline_file):
-            messagebox.showwarning("Línea Base Requerida", f"El archivo '{baseline_file}' no existe. Genere primero una línea base con '➕ Crear Línea Base'.")
+        if self.is_running:
             return
 
+        baseline_file = self.entry_baseline.get().strip()
+        target = self.entry_target.get().strip()
+        duration = self._get_selected_duration()
+
+        self.is_running = True
+        self.stop_requested = False
+        self.btn_check.configure(state="disabled")
+        self.btn_stop.configure(state="normal")
+
         self.clear_results()
-        self.log(f"Comprobando integridad criptográfica contra '{baseline_file}'...")
+        mode_str = f"Ventana {int(duration)}s" if duration < 100000 and duration > 0 else ("Monitoreo Continuo" if duration > 0 else "Instantáneo")
+        self.log(f"Iniciando verificación criptográfica FIM — Modo: {mode_str}...")
+
+        def _on_progress(verif: Dict[str, Any], remaining: float):
+            rem_text = f"{int(remaining)}s restantes" if duration < 100000 and duration > 0 else "Modo Continuo"
+            tampered = verif.get("tampered", False)
+            mod_count = len(verif.get("modified", []))
+            del_count = len(verif.get("deleted", []))
+
+            status_icon = "⚠️ ALTERACIÓN DETECTADA" if tampered else "✔ ÍNTEGRO"
+            self.banner_var.set(
+                f"● VIGILANDO INTEGRIDAD ({rem_text}) — {status_icon} | Archivos: {verif.get('total_monitored')} | Modificados: {mod_count} | Eliminados: {del_count}"
+            )
+            self.after(0, lambda: self._render_results(verif))
 
         def _worker():
             try:
-                results = verify_integrity(baseline_file)
-                self.latest_results = results
-
-                if not results["tampered"]:
-                    self.log(f"[✔] INTEGRIDAD VERIFICADA: Los {results['total_monitored']} archivos coinciden exactamente.")
+                if duration > 0:
+                    targets = [target] if os.path.exists(target) else [baseline_file]
+                    res = watch_integrity_timeline(
+                        targets=targets,
+                        duration=duration,
+                        poll_interval=1.0,
+                        progress_callback=_on_progress,
+                        stop_check=lambda: self.stop_requested,
+                    )
                 else:
-                    self.log(f"[!] ALERTA: Alteraciones detectadas ({len(results['modified'])} modificados, {len(results['deleted'])} eliminados)")
+                    if not os.path.isfile(baseline_file):
+                        raise FileNotFoundError(f"No existe el archivo de línea base '{baseline_file}'. Cree uno primero.")
+                    with open(baseline_file, "r", encoding="utf-8") as f:
+                        baseline = json.load(f)
+                    res = verify_integrity(baseline)
 
-                for m in results["modified"]:
-                    self.after(0, lambda mod=m: self.tree.insert(
-                        "", "end", values=(mod["path"], "¡MODIFICADO!", mod["current_sha256"][:24] + "...", f"{mod['current_size']} B", mod["current_mtime"][:19]), tags=("status_modified",)
-                    ))
-                for d in results["deleted"]:
-                    self.after(0, lambda del_p=d: self.tree.insert(
-                        "", "end", values=(del_p, "¡ELIMINADO!", "-", "-", "-"), tags=("status_deleted",)
-                    ))
-
-                self._update_summary(results)
+                self.latest_results = res
+                self.after(0, lambda: self._render_results(res))
+                self._update_summary(res, baseline_file)
             except Exception as e:
-                self.log(f"[ERROR] Falló la verificación de integridad: {e}")
+                self.log(f"[ERROR] Error durante auditoría de integridad: {e}")
+            finally:
+                self.is_running = False
+                self.after(0, lambda: self.btn_check.configure(state="normal"))
+                self.after(0, lambda: self.btn_stop.configure(state="disabled"))
+                self.banner_var.set(f"✔ COMPLETADO — Auditoría de integridad finalizada.")
 
         self.execute_async(_worker)
 
-    def _update_summary(self, data: dict) -> None:
+    def stop_analysis(self) -> None:
+        if self.is_running:
+            self.stop_requested = True
+            self.log("[*] Solicitud de detención del centinela de integridad...")
+            self.btn_stop.configure(state="disabled")
+
+    def _render_results(self, res: Dict[str, Any]) -> None:
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        for m in res.get("modified", []):
+            self.tree.insert(
+                "", "end",
+                values=(m["path"], "⚠️ MODIFICADO (ALTERADO)", m["current_sha256"], f"{m['current_size']} B", m["current_mtime"]),
+                tags=("status_modified",)
+            )
+
+        for d in res.get("deleted", []):
+            self.tree.insert(
+                "", "end",
+                values=(d, "❌ ELIMINADO", "-", "-", "-"),
+                tags=("status_deleted",)
+            )
+
+        if not res.get("tampered"):
+            self.tree.insert(
+                "", "end",
+                values=("Todos los archivos verificados", "✔ ÍNTEGRO (100% COINCIDENTE)", "SHA-256 verificado", "-", "-"),
+                tags=("status_intact",)
+            )
+
+    def _update_summary(self, res: Dict[str, Any], baseline_file: str) -> None:
         def _render():
             self.summary_text.delete("1.0", "end")
             lines = [
                 "=========================================================================",
-                " INFORME DE INTEGRIDAD CRIPTOGRÁFICA (FIM) — INTEGRITYGUARD",
+                " INFORME FORENSE DE INTEGRIDAD CRIPTOGRÁFICA — INTEGRITYGUARD",
                 "=========================================================================",
-                f" Archivo Baseline:        {self.entry_baseline.get()}",
-                f" Archivos Monitoreados:   {data.get('total_monitored', 0)}",
-                f" Archivos Intactos:       {data.get('intact_count', 0)}",
-                f" Discrepancias / Daños:   {'¡ALTERADO!' if data.get('tampered') else 'NINGUNO (100% INTACTO)'}",
+                f" Base de Datos Empleada:  {baseline_file}",
+                f" Fecha de Línea Base:     {res.get('baseline_created')}",
+                f" Total Archivos Auditados: {res.get('total_monitored')}",
+                f" Archivos Intactos:       {res.get('intact_count')}",
+                f" Archivos Manipulados:    {len(res.get('modified', []))} (!)",
+                f" Archivos Desaparecidos:  {len(res.get('deleted', []))}",
                 "",
-                "--- DETALLES DE ALTERACIONES ---",
+                "--- DICTAMEN DE SEGURIDAD ---",
             ]
-            if not data.get("tampered"):
-                lines.append("  [✔] El sistema se encuentra en su estado original certificado por SHA-256.")
+            if res.get("tampered"):
+                lines.append("  [!] ALERTA CRÍTICA: Se han detectado discrepancias en el sistema.")
+                for m in res.get("modified", []):
+                    lines.append(f"  • MODIFICADO: {m['path']}")
+                    lines.append(f"    Hash Esperado: {m['original_sha256']}")
+                    lines.append(f"    Hash Real:     {m['current_sha256']}")
             else:
-                for m in data.get("modified", []):
-                    lines.append(f"  [MODIFICADO] {m['path']}")
-                    lines.append(f"       Hash Esperado: {m['original_sha256']}")
-                    lines.append(f"       Hash Actual:   {m['current_sha256']}")
-                for d in data.get("deleted", []):
-                    lines.append(f"  [ELIMINADO / DESAPARECIDO] {d}")
+                lines.append("  ✔ VERIFICACIÓN EXITOSA: La integridad del sistema está garantizada.")
 
             lines.append("\n=========================================================================\n")
             self.summary_text.insert("end", "\n".join(lines))
@@ -205,4 +291,3 @@ class IntegrityGuardWindow(BaseToolWindow):
         self.summary_text.delete("1.0", "end")
         self.latest_results = None
         self.set_status("Listo.")
-

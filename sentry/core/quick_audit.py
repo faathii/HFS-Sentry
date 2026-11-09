@@ -154,3 +154,4 @@ def run_system_quick_audit() -> Dict[str, Any]:
         "grade_label": grade_label,
         "checks": checks,
     }
+

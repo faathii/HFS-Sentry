@@ -11,7 +11,8 @@ import json
 import os
 import platform
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+import time
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from sentry.core.base import BaseTool
 from sentry.core.colors import bold, cyan, green, red, yellow
@@ -156,6 +157,57 @@ def verify_integrity(baseline_file: str) -> Dict[str, Any]:
         "modified": modified,
         "deleted": deleted,
     }
+
+
+def watch_integrity_timeline(
+    targets: List[str],
+    duration: float = 30.0,
+    poll_interval: float = 1.0,
+    progress_callback: Optional[Callable[[Dict[str, Any], float], None]] = None,
+    stop_check: Optional[Callable[[], bool]] = None,
+) -> Dict[str, Any]:
+    """Watch directory or files continuously over a time window (e.g. 30 seconds).
+
+    Computes initial baseline in memory and continuously compares hashes, detecting
+    tampering, modifications or deletions in real-time.
+    """
+    file_list = expand_paths(targets)
+    initial_records: Dict[str, Any] = {}
+    for fp in file_list:
+        meta = collect_file_metadata(fp)
+        if meta:
+            initial_records[fp] = meta
+
+    baseline = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "files": initial_records,
+    }
+
+    start_time = time.time()
+    end_time = start_time + duration if duration > 0 else start_time
+
+    while True:
+        now = time.time()
+        remaining = max(0.0, end_time - now) if duration < 100000 and duration > 0 else 999999.0
+
+        current_verif = verify_integrity(baseline)
+        current_verif["duration_seconds"] = round(now - start_time, 1)
+
+        if progress_callback:
+            progress_callback(current_verif, remaining)
+
+        if duration <= 0:
+            break
+
+        if stop_check and stop_check():
+            break
+
+        if duration < 100000 and now >= end_time:
+            break
+
+        time.sleep(poll_interval)
+
+    return verify_integrity(baseline)
 
 
 def print_cli_report(results: Dict[str, Any], baseline_file: str) -> None:

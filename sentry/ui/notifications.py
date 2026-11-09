@@ -87,3 +87,4 @@ def notify_user(title: str, message: str, level: str = "info", duration_ms: int 
         _create_toast()
     except Exception:
         pass
+

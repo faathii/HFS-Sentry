@@ -12,6 +12,8 @@
 3. [CertSentry — Inspector de Caducidad SSL/TLS & Cifrados Criptográficos](#3-certsentry--inspector-de-caducidad-ssltls--cifrados-criptográficos)
 4. [SubnetSweep — Descubridor de Activos de Red Local & Mapeo OUI MAC](#4-subnetsweep--descubridor-de-activos-de-red-local--mapeo-oui-mac)
 5. [IntegrityGuard — Monitor de Integridad de Archivos Críticos (FIM) con SHA-256](#5-integrityguard--monitor-de-integridad-de-archivos-críticos-fim-con-sha-256)
+6. [DnsProbe — Reconocimiento DNS & Seguridad de Correo (SPF, DMARC, DNSSEC)](#6-dnsprobe--reconocimiento-dns--seguridad-de-correo-spf-dmarc-dnssec)
+7. [TrafficSentry — Auditor de Sockets y Conexiones Activas](#7-trafficsentry--auditor-de-sockets-y-conexiones-activas)
 
 ---
 
@@ -107,6 +109,29 @@
 
 ---
 
+## 6. DnsProbe — Reconocimiento DNS & Seguridad de Correo (SPF, DMARC, DNSSEC)
+
+* **Propósito:** Reconocimiento de registros DNS públicos y verificación de posturas defensivas de correo electrónico para prevenir ataques de suplantación de identidad (*spoofing*) y phishing.
+* **Dominio Técnico:** Protocolos DNS sobre HTTPS (DoH RFC 8484) y resolución nativa de sockets sin librerías externas.
+
+### Funcionalidades
+* **Auditoría de SPF & DMARC:** Verifica si el dominio tiene políticas estrictas de rechazo (`p=reject`, `-all`) o si es vulnerable a envío de correos fraudulentos en su nombre (`+all` o falta de DMARC).
+* **Validación DNSSEC:** Comprueba la presencia del flag de datos autenticados (`AD`) asegurando la integridad criptográfica de la zona DNS.
+* **Mapeo de Registros:** Resuelve registros A, AAAA, MX, NS, TXT y CAA.
+
+---
+
+## 7. TrafficSentry — Auditor de Sockets y Conexiones Activas
+
+* **Propósito:** Auditoría interna del host para detectar servicios no autorizados, daemons en segundo plano, backdoors o puertos sensibles expuestos indebidamente a todas las interfaces.
+* **Dominio Técnico:** Inspección del subsistema de red del sistema operativo (`netstat` / `ss`), evaluación de estados de conexión (LISTEN, ESTABLISHED) y mapeo de procesos locales.
+
+### Funcionalidades
+* **Detección de Exposición a 0.0.0.0:** Alerta en rojo si bases de datos (MySQL 3306, PostgreSQL 5432, Redis 6379) o administración remota (RDP 3389, Telnet 23) escuchan hacia el exterior en vez de en `127.0.0.1`.
+* **Filtrado Dinámico:** Permite filtrar por protocolo (TCP/UDP), estado de conexión o buscar por puerto y PID.
+
+---
+
 ## Resumen de Valor para Entrevistas y Demostraciones
 
 | Utilidad | Área Principal | Valor Demostrable en Reunión |
@@ -116,4 +141,6 @@
 | **CertSentry** | Criptografía | Dominio de infraestructura PKI, TLS y ciclo de vida de certificados. |
 | **SubnetSweep** | Infraestructura | Dominio del direccionamiento IP, ARP y auditoría de hardware conectado. |
 | **IntegrityGuard** | HIDS / Forense | Principio de inmutabilidad y verificación criptográfica de integridad. |
+| **DnsProbe** | DNS & Email | Mitigación activa de phishing y validación criptográfica DNSSEC. |
+| **TrafficSentry** | Host & Sockets | Reducción de superficie de ataque y detección de exposición perimetral. |
 

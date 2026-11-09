@@ -35,6 +35,7 @@ FONTS = {
     "caption": ("Segoe UI", 9),
     "code": ("Consolas", 10),
     "code_small": ("Consolas", 9),
+    "code_sm": ("Consolas", 9),
 }
 
 _IMAGE_CACHE: Dict[str, ImageTk.PhotoImage] = {}

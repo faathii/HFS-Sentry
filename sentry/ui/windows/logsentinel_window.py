@@ -1,51 +1,71 @@
-"""Independent Desktop Window for LogSentinel."""
+"""Independent Desktop Window for LogSentinel with Live Tail Observation Window."""
 
 import os
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from sentry.tools.logsentinel import (
     analyze_log_file,
     evaluate_threats,
     generate_block_script,
+    watch_log_timeline,
 )
 from sentry.ui.base_window import BaseToolWindow
 from sentry.ui.theme import COLORS, FONTS
 
 
 class LogSentinelWindow(BaseToolWindow):
-    """LogSentinel Independent GUI Application."""
+    """LogSentinel Independent GUI Application with Live Observation Window."""
 
     tool_id = "logsentinel"
     tool_title = "LogSentinel — Log Forensic Analyzer & Active IDS"
     tool_category = "Forensic & Incident Response"
-    tool_version = "1.0.0"
+    tool_version = "1.1.0"
     icon_filename = "logsentinel.png"
 
     def build_controls(self, parent: ttk.Frame) -> None:
-        """Construct log file picker, threshold controls and analysis buttons."""
+        """Construct log file picker, duration controls, threshold and analysis buttons."""
+        self.stop_requested = False
+        self.is_running = False
+        self.current_threats: List[Dict[str, Any]] = []
+
         row1 = ttk.Frame(parent, style="Card.TFrame")
         row1.pack(fill="x", pady=2)
 
-        ttk.Label(row1, text="Archivo de Registro (Log):", style="Card.TLabel").pack(side="left", padx=(0, 6))
-        self.entry_file = ttk.Entry(row1, width=45)
-        # Default to bundled example log if present
+        ttk.Label(row1, text="Archivo Log:", style="Card.TLabel").pack(side="left", padx=(0, 6))
+        self.entry_file = ttk.Entry(row1, width=38)
         default_log = os.path.join("examples", "sample_auth.log")
         if os.path.isfile(default_log):
             self.entry_file.insert(0, default_log)
         self.entry_file.pack(side="left", padx=(0, 6))
 
         btn_browse = ttk.Button(row1, text="📁 Examinar...", command=self._browse_log_file)
-        btn_browse.pack(side="left", padx=(0, 16))
+        btn_browse.pack(side="left", padx=(0, 14))
 
-        ttk.Label(row1, text="Umbral Fallos SSH:", style="Card.TLabel").pack(side="left", padx=(0, 6))
-        self.spin_thresh = ttk.Spinbox(row1, from_=1, to=100, width=5)
+        ttk.Label(row1, text="Ventana:", style="Card.TLabel").pack(side="left", padx=(0, 6))
+        self.combo_duration = ttk.Combobox(
+            row1,
+            values=[
+                "⚡ Archivo Estático (Instantáneo)",
+                "⏱️ Ventana 30s (Vigilante en Vivo)",
+                "⏱️ Ventana 60s",
+                "🔄 Monitoreo Continuo (Live Tail)",
+            ],
+            state="readonly",
+            width=26,
+        )
+        self.combo_duration.current(0)
+        self.combo_duration.pack(side="left", padx=(0, 14))
+
+        ttk.Label(row1, text="Umbral SSH:", style="Card.TLabel").pack(side="left", padx=(0, 6))
+        self.spin_thresh = ttk.Spinbox(row1, from_=1, to=100, width=4)
         self.spin_thresh.set("5")
-        self.spin_thresh.pack(side="left", padx=(0, 16))
+        self.spin_thresh.pack(side="left", padx=(0, 6))
 
         row2 = ttk.Frame(parent, style="Card.TFrame")
-        row2.pack(fill="x", pady=(8, 2))
+        row2.pack(fill="x", pady=(6, 2))
 
         btn_sample_access = ttk.Button(
             row2, text="Cargar Access Log de Ejemplo", command=self._load_sample_access
@@ -57,8 +77,16 @@ class LogSentinelWindow(BaseToolWindow):
         )
         self.btn_gen_fw.pack(side="left", padx=(0, 10))
 
-        self.btn_run = ttk.Button(row2, text="▶ Analizar Registro", style="Primary.TButton", command=self.start_analysis)
+        self.btn_stop = ttk.Button(row2, text="⏹ Detener", command=self.stop_analysis, state="disabled")
+        self.btn_stop.pack(side="right", padx=4)
+
+        self.btn_run = ttk.Button(row2, text="▶ Analizar / Vigilar Log", style="Primary.TButton", command=self.start_analysis)
         self.btn_run.pack(side="right", padx=4)
+
+        # Progress banner
+        self.banner_var = tk.StringVar(value="Listo para auditar registros del sistema.")
+        self.lbl_banner = ttk.Label(parent, textvariable=self.banner_var, font=FONTS["code_sm"], foreground=COLORS["accent_cyan"])
+        self.lbl_banner.pack(anchor="w", padx=4, pady=(0, 4))
 
     def build_results_table(self, parent: ttk.Frame) -> None:
         """Create Treeview table for detected intrusion threats."""
@@ -90,8 +118,8 @@ class LogSentinelWindow(BaseToolWindow):
 
     def _browse_log_file(self) -> None:
         path = filedialog.askopenfilename(
-            title="Seleccionar Archivo de Registro (auth.log, access.log, secure)",
-            filetypes=[("Archivos Log / Texto", "*.log *.txt"), ("Todos los archivos", "*.*")]
+            title="Seleccionar Archivo de Registro",
+            filetypes=[("Log files (*.log, *.txt)", "*.log;*.txt"), ("All files", "*.*")],
         )
         if path:
             self.entry_file.delete(0, "end")
@@ -102,85 +130,151 @@ class LogSentinelWindow(BaseToolWindow):
         if os.path.isfile(path):
             self.entry_file.delete(0, "end")
             self.entry_file.insert(0, path)
-            self.start_analysis()
+            self.log(f"Cargado archivo de prueba: {path}")
         else:
-            messagebox.showwarning("Aviso", "No se encontró el archivo 'examples/sample_access.log'.")
+            messagebox.showwarning("No Encontrado", f"No se encontró '{path}'.")
+
+    def _get_selected_duration(self) -> float:
+        val = self.combo_duration.get()
+        if "30s" in val:
+            return 30.0
+        elif "60s" in val:
+            return 60.0
+        elif "Continuo" in val:
+            return 999999.0
+        return 0.0
 
     def start_analysis(self) -> None:
-        """Parse log file and correlate threats."""
-        log_path = self.entry_file.get().strip()
-        if not log_path or not os.path.isfile(log_path):
-            messagebox.showerror("Archivo No Válido", f"El archivo de registro no existe:\n{log_path}")
+        if self.is_running:
             return
 
-        threshold = int(self.spin_thresh.get())
+        path = self.entry_file.get().strip()
+        if not path or not os.path.isfile(path):
+            messagebox.showerror("Archivo No Válido", "Por favor seleccione un archivo de log existente.")
+            return
+
+        duration = self._get_selected_duration()
+        ssh_thresh = int(self.spin_thresh.get())
+
+        self.is_running = True
+        self.stop_requested = False
+        self.btn_run.configure(state="disabled")
+        self.btn_stop.configure(state="normal")
+
         self.clear_results()
-        self.log(f"Iniciando análisis forense sobre '{log_path}' con umbral SSH={threshold}...")
+        mode_str = f"Ventana {int(duration)}s" if duration < 100000 and duration > 0 else ("Monitoreo Continuo" if duration > 0 else "Estático")
+        self.log(f"Iniciando análisis forense sobre '{path}' (Umbral: {ssh_thresh}) — Modo: {mode_str}...")
+
+        def _on_progress(threats: List[Dict[str, Any]], remaining: float, lines_read: int):
+            self.current_threats = threats
+            rem_text = f"{int(remaining)}s restantes" if duration < 100000 and duration > 0 else "Modo Continuo"
+            self.banner_var.set(
+                f"● VIGILANDO LOG ({rem_text}) — Líneas Leídas: {lines_read:,} | Amenazas Detectadas: {len(threats)}"
+            )
+            self.after(0, self._render_threats)
 
         def _worker():
-            collector = analyze_log_file(log_path)
-            threats = evaluate_threats(collector, ssh_threshold=threshold)
-            self.log(f"Análisis completado. Amenazas identificadas: {len(threats)}")
+            start_t = time.time()
+            try:
+                if duration > 0:
+                    threats = watch_log_timeline(
+                        file_path=path,
+                        duration=duration,
+                        ssh_threshold=ssh_thresh,
+                        progress_callback=_on_progress,
+                        stop_check=lambda: self.stop_requested,
+                    )
+                else:
+                    collector = analyze_log_file(path)
+                    threats = evaluate_threats(collector, ssh_threshold=ssh_thresh)
 
-            for t in threats:
-                sev = t["severity"]
-                tag = f"sev_{sev.lower()}"
-                sample = t["sample_payloads"][0] if t["sample_payloads"] else "-"
-                total_att = t["ssh_failed_count"] + t["traversal_count"] + t["exploit_attempts"]
-                self.after(0, lambda tr=t, tg=tag, s=sample, tot=total_att: self.tree.insert(
-                    "", "end", values=(tr["severity"], tr["ip"], " | ".join(tr["reasons"]), tot, s), tags=(tg,)
-                ))
-                self.log(f"[{t['severity']}] IP {t['ip']} -> {' | '.join(t['reasons'])}")
-
-            self.latest_results = {
-                "tool": "LogSentinel",
-                "log_file": log_path,
-                "threat_count": len(threats),
-                "threats": threats,
-            }
-            self._update_summary(self.latest_results)
+                self.current_threats = threats
+                elapsed = round(time.time() - start_t, 2)
+                self.latest_results = {
+                    "tool": "LogSentinel",
+                    "file_analyzed": path,
+                    "duration_seconds": duration,
+                    "total_threats": len(threats),
+                    "threats": threats,
+                }
+                self.log(f"Análisis completado en {elapsed}s. {len(threats)} vectores hostiles identificados.")
+                self.after(0, self._render_threats)
+                self._update_summary(self.latest_results, elapsed)
+            except Exception as e:
+                self.log(f"[ERROR] Error al procesar log: {e}")
+            finally:
+                self.is_running = False
+                self.after(0, lambda: self.btn_run.configure(state="normal"))
+                self.after(0, lambda: self.btn_stop.configure(state="disabled"))
+                self.banner_var.set(f"✔ COMPLETADO — {len(self.current_threats)} atacantes correlacionados en el registro.")
 
         self.execute_async(_worker)
 
-    def export_firewall_script(self) -> None:
-        """Generate and save block_threats.sh."""
-        if not self.latest_results or not self.latest_results.get("threats"):
-            messagebox.showinfo("Sin Amenazas", "Primero realice un análisis que identifique amenazas para generar el script de cortafuegos.")
-            return
+    def stop_analysis(self) -> None:
+        if self.is_running:
+            self.stop_requested = True
+            self.log("[*] Solicitud de detención del vigilante de log...")
+            self.btn_stop.configure(state="disabled")
 
-        path = filedialog.asksaveasfilename(
-            defaultextension=".sh",
-            filetypes=[("Scripts Bash", "*.sh"), ("Todos los archivos", "*.*")],
-            title="Guardar Script de Cortafuegos (UFW / iptables)",
-            initialfile="block_threats.sh"
-        )
-        if path:
-            generate_block_script(self.latest_results["threats"], output_file=path)
-            messagebox.showinfo("Script Generado", f"Script de cortafuegos listo para Linux:\n{path}\n\nComando: sudo bash {os.path.basename(path)}")
+    def _render_threats(self) -> None:
+        for item in self.tree.get_children():
+            self.tree.delete(item)
 
-    def _update_summary(self, data: dict) -> None:
+        for t in getattr(self, "current_threats", []):
+            sev = t["severity"]
+            tag = f"sev_{sev.lower()}"
+            sample = t["sample_payloads"][0] if t["sample_payloads"] else "-"
+            total_attempts = t["ssh_failed_count"] + t["traversal_count"] + t["exploit_attempts"]
+            self.tree.insert(
+                "", "end",
+                values=(sev, t["ip"], " | ".join(t["reasons"]), total_attempts, sample),
+                tags=(tag,)
+            )
+
+    def _update_summary(self, data: dict, elapsed: float) -> None:
         def _render():
             self.summary_text.delete("1.0", "end")
+            threats = data.get("threats", [])
             lines = [
                 "=========================================================================",
-                " INFORME DE ANÁLISIS FORENSE E INTRUSIÓN — LOGSENTINEL",
+                " INFORME DE RESPUESTA A INCIDENTES Y FORENSE — LOGSENTINEL",
                 "=========================================================================",
-                f" Archivo Analizado:       {data['log_file']}",
-                f" Amenazas Identificadas:  {data['threat_count']}",
+                f" Archivo Analizado:       {data.get('file_analyzed')}",
+                f" Tiempo de Observación:   {elapsed} segundos",
+                f" Amenazas Identificadas:  {len(threats)} IPs hostiles",
                 "",
-                "--- VECTORES DE ATAQUE IDENTIFICADOS ---",
+                "--- DESGLOSE POR SEVERIDAD ---",
             ]
-            if not data["threats"]:
-                lines.append("  [✔] Estado óptimo: No se encontraron patrones maliciosos que superen los umbrales.")
-            else:
-                for t in data["threats"]:
-                    lines.append(f"  • IP: {t['ip']} [{t['severity']}]")
-                    for r in t["reasons"]:
-                        lines.append(f"      └── {r}")
+            crit = sum(1 for t in threats if t["severity"] == "CRITICAL")
+            high = sum(1 for t in threats if t["severity"] == "HIGH")
+            med = sum(1 for t in threats if t["severity"] == "MEDIUM")
+            lines.append(f"  • CRITICAL (Exploits / RCE / SQLi): {crit}")
+            lines.append(f"  • HIGH (Fuerza Bruta / Traversal):  {high}")
+            lines.append(f"  • MEDIUM (Sondeos automatizados):   {med}")
+
+            lines.append("\n--- IPS BLOQUEABLES SUGERIDAS ---")
+            for t in threats:
+                lines.append(f"  • {t['ip']:<15} [{t['severity']}] -> {', '.join(t['reasons'])}")
 
             lines.append("\n=========================================================================\n")
             self.summary_text.insert("end", "\n".join(lines))
         self.after(0, _render)
+
+    def export_firewall_script(self) -> None:
+        threats = getattr(self, "current_threats", [])
+        if not threats:
+            messagebox.showinfo("Sin Amenazas", "No hay amenazas detectadas para exportar reglas de firewall.")
+            return
+
+        dest = filedialog.asksaveasfilename(
+            title="Guardar Script Firewall",
+            defaultextension=".sh",
+            initialfile="block_threats.sh",
+            filetypes=[("Shell Script (*.sh)", "*.sh"), ("All files", "*.*")],
+        )
+        if dest:
+            generate_block_script(threats, output_file=dest)
+            messagebox.showinfo("Script Creado", f"Reglas de bloqueo IPTables/UFW exportadas con éxito en:\n{dest}")
 
     def clear_results(self) -> None:
         for item in self.tree.get_children():
@@ -189,4 +283,3 @@ class LogSentinelWindow(BaseToolWindow):
         self.summary_text.delete("1.0", "end")
         self.latest_results = None
         self.set_status("Listo.")
-

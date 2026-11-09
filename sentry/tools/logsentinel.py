@@ -6,11 +6,13 @@ Zero external dependencies (Python 3 standard library only).
 
 import argparse
 from collections import defaultdict
+import datetime
 import json
 import os
 import re
 import sys
-from typing import Any, Dict, List, Optional, Set
+import time
+from typing import Any, Callable, Dict, List, Optional, Set
 
 from sentry.core.base import BaseTool
 from sentry.core.colors import bold, cyan, green, red, yellow
@@ -215,6 +217,114 @@ def evaluate_threats(collector: IncidentCollector, ssh_threshold: int = 5) -> Li
     priority = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
     threats.sort(key=lambda x: (priority.get(x["severity"], 4), -x["ssh_failed_count"], -x["traversal_count"]))
     return threats
+
+
+def watch_log_timeline(
+    file_path: str,
+    duration: float = 30.0,
+    ssh_threshold: int = 5,
+    poll_interval: float = 0.5,
+    progress_callback: Optional[Callable[[List[Dict[str, Any]], float, int], None]] = None,
+    stop_check: Optional[Callable[[], bool]] = None,
+) -> List[Dict[str, Any]]:
+    """Live stream and analyze log entries in real-time over a time window (e.g. 30 seconds).
+
+    Tails incoming log lines appended to `file_path` and correlates emerging threats dynamically.
+    """
+    collector = IncidentCollector()
+    total_lines = 0
+
+    if not os.path.exists(file_path):
+        return []
+
+    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+        # First read existing content
+        for line in f:
+            total_lines += 1
+            line = line.strip()
+            if not line:
+                continue
+
+            matched_ssh = False
+            for pat in SSH_FAILED_PATTERNS:
+                m = pat.search(line)
+                if m:
+                    ip = m.group(m.lastindex)
+                    collector.record_ssh_failure(ip)
+                    matched_ssh = True
+                    break
+
+            if not matched_ssh:
+                m_web = WEB_LOG_PATTERN.match(line)
+                if m_web:
+                    ip = m_web.group(1)
+                    path = m_web.group(4)
+                    ua = m_web.group(7)
+                    _inspect_web_line(collector, ip, path, ua)
+                else:
+                    m_simple = WEB_SIMPLE_PATTERN.search(line)
+                    if m_simple:
+                        ip, path, ua = m_simple.groups()
+                        _inspect_web_line(collector, ip, path, ua)
+
+        # Notify initial state
+        initial_threats = evaluate_threats(collector, ssh_threshold)
+        if progress_callback:
+            progress_callback(initial_threats, duration, total_lines)
+
+        if duration <= 0:
+            return initial_threats
+
+        start_time = time.time()
+        end_time = start_time + duration
+
+        while True:
+            now = time.time()
+            remaining = max(0.0, end_time - now) if duration < 100000 else 999999.0
+
+            line = f.readline()
+            if line:
+                total_lines += 1
+                line = line.strip()
+                if line:
+                    matched_ssh = False
+                    for pat in SSH_FAILED_PATTERNS:
+                        m = pat.search(line)
+                        if m:
+                            ip = m.group(m.lastindex)
+                            collector.record_ssh_failure(ip)
+                            matched_ssh = True
+                            break
+
+                    if not matched_ssh:
+                        m_web = WEB_LOG_PATTERN.match(line)
+                        if m_web:
+                            ip = m_web.group(1)
+                            path = m_web.group(4)
+                            ua = m_web.group(7)
+                            _inspect_web_line(collector, ip, path, ua)
+                        else:
+                            m_simple = WEB_SIMPLE_PATTERN.search(line)
+                            if m_simple:
+                                ip, path, ua = m_simple.groups()
+                                _inspect_web_line(collector, ip, path, ua)
+
+                    current_threats = evaluate_threats(collector, ssh_threshold)
+                    if progress_callback:
+                        progress_callback(current_threats, remaining, total_lines)
+            else:
+                if progress_callback:
+                    current_threats = evaluate_threats(collector, ssh_threshold)
+                    progress_callback(current_threats, remaining, total_lines)
+                time.sleep(poll_interval)
+
+            if stop_check and stop_check():
+                break
+
+            if duration < 100000 and now >= end_time:
+                break
+
+    return evaluate_threats(collector, ssh_threshold)
 
 
 def generate_block_script(threats: List[Dict[str, Any]], output_file: str = "block_threats.sh") -> str:

@@ -6,12 +6,13 @@ Zero external dependencies (Python 3 standard library only).
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import datetime
 import json
 import socket
 import ssl
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 import urllib.request
 
 from sentry.core.base import BaseTool
@@ -150,6 +151,85 @@ def scan_ports(host: str, ports: List[int], workers: int = 20, timeout: float = 
                 open_ports.append(res)
     open_ports.sort(key=lambda x: x["port"])
     return open_ports
+
+
+def scan_ports_timeline(
+    host: str,
+    ports: List[int],
+    duration: float = 30.0,
+    interval: float = 2.0,
+    timeout: float = 0.5,
+    workers: int = 30,
+    progress_callback: Optional[Callable[[List[Dict[str, Any]], float], None]] = None,
+    stop_check: Optional[Callable[[], bool]] = None,
+) -> List[Dict[str, Any]]:
+    """Monitor TCP port availability and jitter over a time window (e.g. 30 seconds).
+
+    Calculates service stability, latency variance, and detects intermittent drops.
+    """
+    cumulative: Dict[int, Dict[str, Any]] = {}
+    start_time = time.time()
+    end_time = start_time + duration if duration > 0 else start_time
+
+    while True:
+        now = time.time()
+        remaining = max(0.0, end_time - now) if duration > 0 else 0.0
+
+        current_open = {p["port"]: p for p in scan_ports(host, ports, timeout=timeout, workers=workers)}
+        now_iso = datetime.datetime.now().strftime("%H:%M:%S")
+
+        for port in ports:
+            is_open = port in current_open
+            current_data = current_open.get(port)
+
+            if port not in cumulative:
+                if is_open:
+                    cumulative[port] = {
+                        **current_data,
+                        "first_seen": now_iso,
+                        "last_seen": now_iso,
+                        "checks_total": 1,
+                        "checks_success": 1,
+                        "stability_percent": 100.0,
+                        "status": "ESTABLE",
+                        "latencies": [current_data["latency_ms"]],
+                    }
+            else:
+                entry = cumulative[port]
+                entry["checks_total"] += 1
+                if is_open:
+                    entry["checks_success"] += 1
+                    entry["last_seen"] = now_iso
+                    entry["latencies"].append(current_data["latency_ms"])
+                    entry["latency_ms"] = current_data["latency_ms"]
+                    if current_data.get("banner"):
+                        entry["banner"] = current_data["banner"]
+
+                entry["stability_percent"] = round((entry["checks_success"] / entry["checks_total"]) * 100.0, 1)
+                if entry["stability_percent"] >= 90.0:
+                    entry["status"] = "ESTABLE"
+                elif entry["stability_percent"] > 0:
+                    entry["status"] = "INTERMITENTE"
+                else:
+                    entry["status"] = "CAÍDO"
+
+        result_list = sorted(cumulative.values(), key=lambda x: x["port"])
+
+        if progress_callback:
+            progress_callback(result_list, remaining)
+
+        if duration <= 0:
+            break
+
+        if stop_check and stop_check():
+            break
+
+        if now >= end_time:
+            break
+
+        time.sleep(min(interval, max(0.5, end_time - now)))
+
+    return result_list
 
 
 def audit_http_headers(host: str, port: int = 443, timeout: float = 3.0) -> Dict[str, Any]:

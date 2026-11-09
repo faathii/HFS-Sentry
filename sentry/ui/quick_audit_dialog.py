@@ -188,3 +188,4 @@ class QuickAuditDialog(tk.Toplevel):
             with open(path, "w", encoding="utf-8") as f:
                 f.write(html)
             messagebox.showinfo("Guardado", f"Informe HTML guardado en:\n{path}")
+
