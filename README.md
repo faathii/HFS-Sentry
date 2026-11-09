@@ -74,9 +74,28 @@ git clone https://github.com/faathii/HFS-Sentry.git
 cd HFS-Sentry
 ```
 
-### Comprobar la Suite
+### Ejecución de la Suite de Escritorio (Desktop Hub)
+Al estilo de las suites profesionales de software (como Adobe o Microsoft), HFS-Sentry cuenta con un **Hub de Escritorio nativo** que permite abrir cada una de las herramientas en **ventanas independientes**:
+
 ```bash
+# Iniciar la Suite Gráfica (Hub de Control):
+python sentry.py
+
+# O bien abrir directamente cualquier herramienta en su ventana dedicada:
+python sentry.py netsentry --gui
+python sentry.py logsentinel --gui
+```
+
+> **100% Local:** No levanta servidores web, no utiliza puertos localhost ni HTML en el navegador. Es una aplicación de escritorio nativa, portable y de alto rendimiento.
+
+### Modos por Línea de Comandos (CLI & Servidores Headless)
+Si estás en un servidor remoto o prefieres la terminal:
+```bash
+# Ver catálogo de herramientas registradas:
 python sentry.py --list
+
+# Modo menú interactivo en consola:
+python sentry.py -i
 ```
 
 ### (Opcional) Instalar en Modo Editable

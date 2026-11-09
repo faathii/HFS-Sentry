@@ -55,6 +55,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Launch interactive security menu mode.",
     )
+    parser.add_argument(
+        "-g", "--gui",
+        action="store_true",
+        help="Launch the HFS-Sentry Desktop Suite Hub (GUI).",
+    )
 
     subparsers = parser.add_subparsers(
         dest="tool_name",
@@ -138,22 +143,68 @@ def run_interactive_menu(parser: argparse.ArgumentParser) -> int:
             print(red(f"[!] Error: {e}"))
 
 
+def launch_gui_hub() -> int:
+    """Launch the main HFS-Sentry Desktop Suite Hub."""
+    try:
+        from sentry.ui.app import SentrySuiteApp
+        app = SentrySuiteApp()
+        app.mainloop()
+        return 0
+    except Exception as e:
+        print(f"[!] No se pudo iniciar la interfaz gráfica (GUI): {e}", file=sys.stderr)
+        return 1
+
+
+def launch_tool_gui(tool_id: str) -> int:
+    """Launch an individual tool in its dedicated independent desktop window."""
+    try:
+        import tkinter as tk
+        from sentry.ui.theme import apply_suite_theme
+        from sentry.ui.windows import TOOL_WINDOW_MAP
+
+        window_cls = TOOL_WINDOW_MAP.get(tool_id)
+        if not window_cls:
+            print(f"[!] No se encontró ventana gráfica para '{tool_id}'", file=sys.stderr)
+            return 1
+
+        root = tk.Tk()
+        root.withdraw()  # Hide root shell
+        apply_suite_theme(root)
+
+        win = window_cls(master=root)
+        win.protocol("WM_DELETE_WINDOW", lambda: (win.destroy(), root.quit()))
+        root.mainloop()
+        return 0
+    except Exception as e:
+        print(f"[!] Falló el inicio de la ventana para '{tool_id}': {e}", file=sys.stderr)
+        return 1
+
+
 def main(argv: Optional[List[str]] = None) -> int:
-    """Entry point for CLI execution."""
+    """Entry point for CLI & GUI execution."""
     parser = build_parser()
 
     if argv is None:
         argv = sys.argv[1:]
 
+    # If --gui or -g requested at top level
+    if "-g" in argv or "--gui" in argv:
+        return launch_gui_hub()
+
     # If --interactive is requested
     if "-i" in argv or "--interactive" in argv:
         return run_interactive_menu(parser)
 
-    # If no arguments provided, show banner and available tools
+    # If no arguments provided
     if not argv:
-        print(BANNER)
-        print_tool_catalogue()
-        return 0
+        # If in a graphical desktop environment (Windows or X11/Wayland), default to launching the Desktop Suite Hub!
+        is_graphical = sys.platform == "win32" or bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+        if is_graphical:
+            return launch_gui_hub()
+        else:
+            print(BANNER)
+            print_tool_catalogue()
+            return 0
 
     # If --list is requested
     if "-l" in argv or "--list" in argv:
@@ -166,6 +217,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     if not args.tool_name:
         parser.print_help()
         return 0
+
+    # If --gui was passed to a specific tool (e.g. sentry netsentry --gui)
+    if "--gui" in argv or "-g" in argv:
+        return launch_tool_gui(args.tool_name)
 
     registry = get_tool_registry()
     tool = registry.get(args.tool_name)

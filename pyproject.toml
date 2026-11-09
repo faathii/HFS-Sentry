@@ -38,6 +38,7 @@ Issues = "https://github.com/faathii/HFS-Sentry/issues"
 
 [project.scripts]
 hfs-sentry = "sentry.cli:main"
+hfs-sentry-gui = "sentry.ui.app:main"
 sentry = "sentry.cli:main"
 
 [tool.setuptools.packages.find]
