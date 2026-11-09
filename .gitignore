@@ -39,7 +39,11 @@ env/
 *.swo
 *~
 
-# Testing & Coverage
+# User & local data
+sentry_config.json
+*.jsonl
+*.log
+
 .tox/
 .nox/
 .coverage

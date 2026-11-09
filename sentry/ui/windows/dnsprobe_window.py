@@ -62,6 +62,13 @@ class DnsProbeWindow(BaseToolWindow):
         self.tree.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
 
+    def apply_prefill(self, value: str) -> None:
+        """Prefill target domain from cross-tool pivot."""
+        clean = value.split(":")[0].replace("https://", "").replace("http://", "").split("/")[0]
+        self.entry_domain.delete(0, "end")
+        self.entry_domain.insert(0, clean)
+        self.entry_domain.focus_set()
+
     def start_analysis(self) -> None:
         domain = self.entry_domain.get().strip().replace("https://", "").replace("http://", "").split("/")[0]
         if not domain:

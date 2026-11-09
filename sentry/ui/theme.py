@@ -45,7 +45,15 @@ def load_icon(path: str, size: tuple = (48, 48)) -> Optional[ImageTk.PhotoImage]
     """Load, resize and cache image with transparency support."""
     key = f"{path}_{size[0]}x{size[1]}"
     if key in _IMAGE_CACHE:
-        return _IMAGE_CACHE[key]
+        cached = _IMAGE_CACHE[key]
+        try:
+            root = getattr(tk, "_default_root", None)
+            if root and hasattr(root, "tk"):
+                root.tk.call("image", "type", str(cached))
+                return cached
+            return cached
+        except Exception:
+            _IMAGE_CACHE.pop(key, None)
 
     if not os.path.isfile(path):
         return None

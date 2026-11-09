@@ -40,10 +40,13 @@ class BaseToolWindow(tk.Toplevel):
         self._stopwatch_target_duration = 0.0
 
         # Set window icon if available
-        icon_path = os.path.join("assets", "logos", self.icon_filename)
-        self.tool_photo = load_icon(icon_path, size=(32, 32))
-        if self.tool_photo:
-            self.iconphoto(False, self.tool_photo)
+        try:
+            icon_path = os.path.join("assets", "logos", self.icon_filename)
+            self.tool_photo = load_icon(icon_path, size=(32, 32))
+            if self.tool_photo:
+                self.iconphoto(False, self.tool_photo)
+        except Exception:
+            self.tool_photo = None
 
         self._build_menu()
         self._build_header()
@@ -147,6 +150,9 @@ class BaseToolWindow(tk.Toplevel):
         self.tab_table = ttk.Frame(self.notebook, padding=6)
         self.notebook.add(self.tab_table, text="📊 Resultados Estructurados")
         self.build_results_table(self.tab_table)
+        if hasattr(self, "tree") and isinstance(self.tree, ttk.Treeview):
+            self.enable_treeview_sorting(self.tree)
+            self.enable_treeview_context_menu(self.tree)
 
         # Tab 2: Real-time Live Log Console
         self.tab_console = ttk.Frame(self.notebook, padding=6)
@@ -374,28 +380,242 @@ class BaseToolWindow(tk.Toplevel):
                 f.write(content)
             messagebox.showinfo("Exportación Exitosa", f"Registro guardado correctamente en:\n{path}")
 
+    def apply_prefill(self, value: str) -> None:
+        """Override in subclasses to prefill target inputs when pivoting between tools."""
+        pass
+
+    def enable_treeview_sorting(self, tree: ttk.Treeview) -> None:
+        """Enable click-on-heading sorting for all columns with type-aware logic."""
+        for col in tree["columns"]:
+            tree.heading(col, command=lambda c=col: self._sort_column(tree, c, False))
+
+    def _sort_column(self, tree: ttk.Treeview, col: str, reverse: bool) -> None:
+        items = list(tree.get_children(""))
+        if not items:
+            return
+
+        def _sort_key(item_id: str):
+            val = str(tree.set(item_id, col)).strip()
+            val_upper = val.upper()
+
+            # 1. Risk ordering
+            risk_map = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "CLEAN": 4}
+            if val_upper in risk_map:
+                return (0, risk_map[val_upper], "")
+
+            # 2. Status ordering
+            if "ACTIVO" in val_upper:
+                return (1, 0, "")
+            elif "LISTEN" in val_upper:
+                return (1, 1, "")
+            elif "CERRADO" in val_upper or "INACTIVO" in val_upper:
+                return (1, 2, "")
+
+            # 3. Numeric (duration "3.2s", latency "14.5 ms", port 80, size "1024 B")
+            clean_num = val.replace("s", "").replace("ms", "").replace("B", "").replace("%", "").strip()
+            try:
+                num = float(clean_num)
+                return (2, num, "")
+            except ValueError:
+                pass
+
+            # 4. Standard string
+            return (3, val.lower(), "")
+
+        sorted_items = sorted(items, key=_sort_key, reverse=reverse)
+        for index, item_id in enumerate(sorted_items):
+            tree.move(item_id, "", index)
+
+        # Toggle sort order on next click and update indicator arrow
+        for c in tree["columns"]:
+            heading_text = tree.heading(c)["text"].replace(" ▲", "").replace(" ▼", "")
+            if c == col:
+                arrow = " ▼" if reverse else " ▲"
+                tree.heading(c, text=heading_text + arrow, command=lambda: self._sort_column(tree, c, not reverse))
+            else:
+                tree.heading(c, text=heading_text, command=lambda _c=c: self._sort_column(tree, _c, False))
+
+    def enable_treeview_context_menu(self, tree: ttk.Treeview) -> None:
+        """Attach right-click context menu with copy actions and cross-tool pivots."""
+        menu = tk.Menu(
+            self,
+            tearoff=0,
+            bg=COLORS["bg_card"],
+            fg=COLORS["text_primary"],
+            activebackground=COLORS["accent_blue"],
+            activeforeground="#ffffff",
+        )
+
+        def _on_right_click(event):
+            row_id = tree.identify_row(event.y)
+            if not row_id:
+                return
+
+            tree.selection_set(row_id)
+            vals = tree.item(row_id, "values")
+            if not vals:
+                return
+
+            # Detect target IP, port, or host
+            target_ip = None
+            for v in vals:
+                v_str = str(v).strip()
+                if ":" in v_str and not v_str.startswith("["):
+                    candidate = v_str.split(":")[0]
+                else:
+                    candidate = v_str
+
+                parts = candidate.split(".")
+                if len(parts) == 4 and all(p.isdigit() and 0 <= int(p) <= 255 for p in parts if p.isdigit()):
+                    target_ip = candidate
+                    break
+                elif "." in candidate and not candidate.endswith(".") and not candidate.startswith("."):
+                    target_ip = candidate
+                    break
+
+            menu.delete(0, "end")
+            menu.add_command(label="📋 Copiar Valor", command=lambda: self._copy_to_clipboard(vals[0] if vals else ""))
+            menu.add_command(label="📋 Copiar Fila Completa", command=lambda: self._copy_to_clipboard(" | ".join(str(v) for v in vals)))
+
+            if target_ip:
+                menu.add_separator()
+                menu.add_command(label=f"🎯 Copiar IP / Objetivo: {target_ip}", command=lambda: self._copy_to_clipboard(target_ip))
+                menu.add_separator()
+                menu.add_command(
+                    label=f"⚡ Auditar Puertos con NetSentry ({target_ip})",
+                    command=lambda: self._pivot_to_tool("netsentry", target_ip)
+                )
+                menu.add_command(
+                    label=f"🌐 Ver Registros DNS con DnsProbe ({target_ip})",
+                    command=lambda: self._pivot_to_tool("dnsprobe", target_ip)
+                )
+                menu.add_command(
+                    label=f"🔒 Inspeccionar Certificado con CertSentry ({target_ip})",
+                    command=lambda: self._pivot_to_tool("certsentry", target_ip)
+                )
+                menu.add_command(
+                    label=f"📡 Barrido de Subred con SubnetSweep ({target_ip})",
+                    command=lambda: self._pivot_to_tool("subnetsweep", target_ip)
+                )
+
+            menu.tk_popup(event.x_root, event.y_root)
+
+        tree.bind("<Button-3>", _on_right_click)
+        tree.bind("<Button-2>", _on_right_click)
+
+    def _copy_to_clipboard(self, text: str) -> None:
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.set_status(f"Copiado al portapapeles: {text[:45]}...", state="success")
+
+    def _pivot_to_tool(self, tool_id: str, target: str) -> None:
+        """Cross-tool pivot launcher."""
+        app = getattr(self, "master", None)
+        if app and hasattr(app, "launch_tool"):
+            app.launch_tool(tool_id, prefill_data=target)
+        else:
+            try:
+                from sentry.ui.app import TOOL_WINDOW_MAP
+                cls = TOOL_WINDOW_MAP.get(tool_id)
+                if cls:
+                    w = cls(master=self.master)
+                    w.apply_prefill(target)
+                    w.focus_set()
+            except Exception as e:
+                self.log(f"[ERROR] Error al cambiar a herramienta {tool_id}: {e}")
+
     def show_settings_dialog(self) -> None:
-        """Display tool preferences dialog."""
+        """Display interactive user preferences dialog with persistent storage."""
+        from sentry.core.config import load_config, save_config
+
+        cfg = load_config()
+
         dlg = tk.Toplevel(self)
-        dlg.title(f"Ajustes - {self.tool_title}")
-        dlg.geometry("450x320")
+        dlg.title(f"Ajustes & Preferencias — HFS-Sentry")
+        dlg.geometry("500x380")
+        dlg.minsize(440, 340)
         dlg.configure(bg=COLORS["bg_dark"])
         dlg.transient(self)
         dlg.grab_set()
 
-        lbl = ttk.Label(dlg, text=f"Configuración de {self.tool_title}", font=FONTS["title_small"])
-        lbl.pack(pady=12)
+        lbl = ttk.Label(dlg, text="Preferencias Generales de la Suite", font=FONTS["title_small"])
+        lbl.pack(pady=(16, 8))
 
         box = ttk.Frame(dlg, padding=16, style="Card.TFrame")
         box.pack(fill="both", expand=True, padx=16, pady=8)
 
-        ttk.Label(box, text="Configuración por defecto del motor:", style="Card.TLabel").pack(anchor="w", pady=(0, 8))
-        ttk.Label(box, text="• Cero dependencias externas activas (Python 3 stdlib)", style="CardSecondary.TLabel").pack(anchor="w")
-        ttk.Label(box, text="• Concurrencia mediante ThreadPoolExecutor", style="CardSecondary.TLabel").pack(anchor="w")
-        ttk.Label(box, text="• Modos de exportación: JSON / TXT / Shell", style="CardSecondary.TLabel").pack(anchor="w")
+        # 1. Sound alerts toggle
+        var_sound = tk.BooleanVar(value=cfg.get("sound_alerts_enabled", True))
+        chk_sound = ttk.Checkbutton(
+            box,
+            text="Habilitar avisos sonoros de sistema (Cues acústicos para alertas críticas y fin de auditoría)",
+            variable=var_sound
+        )
+        chk_sound.pack(anchor="w", pady=(0, 14))
 
-        btn_close = ttk.Button(dlg, text="Cerrar", command=dlg.destroy)
-        btn_close.pack(pady=12)
+        # 2. Default duration
+        ttk.Label(box, text="Duración por defecto de ventana temporal:", style="Card.TLabel").pack(anchor="w", pady=(0, 4))
+        combo_dur = ttk.Combobox(
+            box,
+            values=["30 segundos (Recomendado)", "10 segundos", "60 segundos", "Instantáneo (1s)", "Monitoreo Continuo"],
+            state="readonly",
+            width=32
+        )
+        cur_dur = cfg.get("default_duration_seconds", 30.0)
+        if cur_dur == 10.0:
+            combo_dur.current(1)
+        elif cur_dur == 60.0:
+            combo_dur.current(2)
+        elif cur_dur <= 1.0:
+            combo_dur.current(3)
+        elif cur_dur >= 100000:
+            combo_dur.current(4)
+        else:
+            combo_dur.current(0)
+        combo_dur.pack(anchor="w", pady=(0, 14))
+
+        # 3. Default Timeout
+        ttk.Label(box, text="Timeout por defecto para conexiones de red (segundos):", style="Card.TLabel").pack(anchor="w", pady=(0, 4))
+        entry_to = ttk.Entry(box, width=12)
+        entry_to.insert(0, str(cfg.get("default_timeout_seconds", 3.0)))
+        entry_to.pack(anchor="w", pady=(0, 14))
+
+        def _save_prefs():
+            try:
+                to_val = float(entry_to.get().strip())
+            except ValueError:
+                to_val = 3.0
+
+            dur_str = combo_dur.get()
+            if "10s" in dur_str or "10 seg" in dur_str:
+                dur_val = 10.0
+            elif "60s" in dur_str or "60 seg" in dur_str:
+                dur_val = 60.0
+            elif "Instant" in dur_str:
+                dur_val = 0.0
+            elif "Continuo" in dur_str:
+                dur_val = 999999.0
+            else:
+                dur_val = 30.0
+
+            cfg["sound_alerts_enabled"] = var_sound.get()
+            cfg["default_duration_seconds"] = dur_val
+            cfg["default_timeout_seconds"] = to_val
+
+            if save_config(cfg):
+                messagebox.showinfo("Preferencias Guardadas", "Sus preferencias han sido guardadas con éxito.")
+                dlg.destroy()
+            else:
+                messagebox.showerror("Error", "No se pudieron guardar las preferencias.")
+
+        btn_row = ttk.Frame(dlg, style="Card.TFrame")
+        btn_row.pack(fill="x", padx=16, pady=(0, 14))
+
+        btn_save = ttk.Button(btn_row, text="💾 Guardar Preferencias", style="Primary.TButton", command=_save_prefs)
+        btn_save.pack(side="right", padx=4)
+
+        btn_cancel = ttk.Button(btn_row, text="Cancelar", command=dlg.destroy)
+        btn_cancel.pack(side="right", padx=4)
 
     def show_about(self) -> None:
         """Display about modal."""

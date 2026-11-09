@@ -1,10 +1,12 @@
 """System Quick Audit & Security Hardening Score engine.
 
-Performs a high-speed, 4-point live audit of the local host environment:
+Performs a high-speed, comprehensive 6-point live audit of the local host environment:
 1. Local Network Exposure (Localhost Listening Ports)
-2. Host File System Integrity (Hosts file SHA-256)
-3. Cryptographic Runtime Capabilities (OpenSSL 3.x, TLS 1.3)
-4. Active Network Interface & Default Gateway Readiness
+2. Public 0.0.0.0 Socket Exposure (TrafficSentry Engine)
+3. Host File System Integrity (Hosts file SHA-256)
+4. Cryptographic Runtime Capabilities (OpenSSL 3.x, TLS 1.3)
+5. DNS Resolution & Anti-Spoofing Readiness
+6. Active Network Interface & Gateway Readiness
 
 Zero external dependencies (pure Python 3 standard library).
 """
@@ -18,9 +20,11 @@ import ssl
 import time
 from typing import Any, Dict, List
 
+from sentry.tools.trafficsentry import audit_active_sockets
+
 
 def run_system_quick_audit() -> Dict[str, Any]:
-    """Execute concurrent 4-point local security assessment."""
+    """Execute concurrent 6-point local security assessment."""
     start_time = time.time()
     hostname = platform.node()
     os_name = f"{platform.system()} {platform.release()}"
@@ -35,7 +39,7 @@ def run_system_quick_audit() -> Dict[str, Any]:
         checks.append({
             "name": "Motor Criptográfico TLS",
             "status": "PASS",
-            "score": 25,
+            "score": 20,
             "details": f"{openssl_ver} (TLS 1.3 compatible)",
         })
     else:
@@ -43,7 +47,7 @@ def run_system_quick_audit() -> Dict[str, Any]:
         checks.append({
             "name": "Motor Criptográfico TLS",
             "status": "WARN",
-            "score": 15,
+            "score": 10,
             "details": f"Versión heredada detectada: {openssl_ver}",
         })
 
@@ -61,7 +65,7 @@ def run_system_quick_audit() -> Dict[str, Any]:
             checks.append({
                 "name": "Integridad de Archivo Hosts",
                 "status": "PASS",
-                "score": 25,
+                "score": 20,
                 "details": f"SHA-256: {hosts_hash[:20]}... (Sin alteraciones sospechosas)",
             })
         except Exception as e:
@@ -77,7 +81,7 @@ def run_system_quick_audit() -> Dict[str, Any]:
         checks.append({
             "name": "Integridad de Archivo Hosts",
             "status": "FAIL",
-            "score": 5,
+            "score": 0,
             "details": f"Archivo hosts no encontrado en {hosts_path}",
         })
 
@@ -95,19 +99,67 @@ def run_system_quick_audit() -> Dict[str, Any]:
         checks.append({
             "name": "Exposición Perimetral Local",
             "status": "PASS",
-            "score": 25,
+            "score": 15,
             "details": "Ningún puerto de servicio sensible abierto en localhost (Superficie mínima)",
         })
     else:
-        points -= (len(open_local) * 5)
+        points -= (len(open_local) * 4)
         checks.append({
             "name": "Exposición Perimetral Local",
             "status": "WARN",
-            "score": max(5, 25 - len(open_local) * 5),
+            "score": max(5, 15 - len(open_local) * 4),
             "details": f"Servicios escuchando en localhost: {open_local}",
         })
 
-    # 4. Network Interface Discovery
+    # 4. Public 0.0.0.0 Exposure (TrafficSentry Engine)
+    try:
+        active_sockets = audit_active_sockets(listening_only=True)
+        risky_public = [s for s in active_sockets if s["risk_level"] in ("CRITICAL", "HIGH")]
+        if not risky_public:
+            checks.append({
+                "name": "Exposición a 0.0.0.0 (TrafficSentry)",
+                "status": "PASS",
+                "score": 20,
+                "details": "No hay bases de datos ni servicios de riesgo expuestos públicamente a todas las interfaces",
+            })
+        else:
+            points -= min(30, len(risky_public) * 15)
+            ports_exposed = [f"{s['local_port']}/{s['process_name']}" for s in risky_public]
+            checks.append({
+                "name": "Exposición a 0.0.0.0 (TrafficSentry)",
+                "status": "FAIL",
+                "score": 0,
+                "details": f"¡Alerta! Servicios de alto riesgo expuestos en 0.0.0.0: {', '.join(ports_exposed)}",
+            })
+    except Exception as e:
+        checks.append({
+            "name": "Exposición a 0.0.0.0 (TrafficSentry)",
+            "status": "NOTICE",
+            "score": 15,
+            "details": f"Auditoría no completada: {e}",
+        })
+
+    # 5. DNS Resolution Health
+    try:
+        t_dns_start = time.time()
+        socket.gethostbyname("dns.google")
+        dns_lat = round((time.time() - t_dns_start) * 1000, 1)
+        checks.append({
+            "name": "Resolución de Nombres DNS",
+            "status": "PASS",
+            "score": 15,
+            "details": f"Resolución DNS activa y funcional ({dns_lat} ms)",
+        })
+    except Exception:
+        points -= 10
+        checks.append({
+            "name": "Resolución de Nombres DNS",
+            "status": "WARN",
+            "score": 5,
+            "details": "Resolución DNS fallida o sin conexión a internet",
+        })
+
+    # 6. Network Interface Discovery
     local_ip = "127.0.0.1"
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -117,14 +169,14 @@ def run_system_quick_audit() -> Dict[str, Any]:
         checks.append({
             "name": "Adaptador de Red Activo",
             "status": "PASS",
-            "score": 25,
+            "score": 10,
             "details": f"Interfaz primaria activa detectada ({local_ip})",
         })
     except Exception:
         checks.append({
             "name": "Adaptador de Red Activo",
             "status": "NOTICE",
-            "score": 20,
+            "score": 10,
             "details": "Modo local desconectado / air-gapped",
         })
 

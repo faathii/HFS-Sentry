@@ -57,8 +57,8 @@ class NetSentryWindow(BaseToolWindow):
         self.combo_duration = ttk.Combobox(
             row2,
             values=[
-                "⚡ Escaneo Instantáneo",
                 "⏱️ Ventana 30s (Watchdog de Servicios)",
+                "⚡ Escaneo Instantáneo",
                 "⏱️ Ventana 60s",
                 "🔄 Monitoreo Continuo",
             ],
@@ -66,7 +66,12 @@ class NetSentryWindow(BaseToolWindow):
             width=26,
         )
         self.combo_duration.current(0)
-        self.combo_duration.pack(side="left", padx=(0, 12))
+        self.combo_duration.pack(side="left", padx=(0, 10))
+
+        ttk.Label(row2, text="Filtrar:", style="Card.TLabel").pack(side="left", padx=(0, 6))
+        self.entry_filter = ttk.Entry(row2, width=16)
+        self.entry_filter.pack(side="left", padx=(0, 10))
+        self.entry_filter.bind("<KeyRelease>", lambda e: self._render_ports(getattr(self, "_cached_ports", [])))
 
         self.banner_var = tk.StringVar(value="Listo para auditar puertos y seguridad perimetral.")
         self.lbl_banner = ttk.Label(row2, textvariable=self.banner_var, font=FONTS["code_small"], foreground=COLORS["accent_cyan"])
@@ -234,14 +239,35 @@ class NetSentryWindow(BaseToolWindow):
         self.btn_stop.configure(state="disabled")
         self.banner_var.set("⏹ Watchdog de puertos detenido por el operador.")
 
+    def apply_prefill(self, value: str) -> None:
+        """Prefill target from cross-tool pivot."""
+        self.entry_target.delete(0, "end")
+        self.entry_target.insert(0, value)
+        self.entry_target.focus_set()
+
     def _render_ports(self, open_ports: List[Dict[str, Any]]) -> None:
+        self._cached_ports = open_ports
         for item in self.tree.get_children():
             self.tree.delete(item)
+
+        query = self.entry_filter.get().strip().lower()
 
         for p in open_ports:
             port_num = p["port"]
             service = p.get("service", SERVICE_NAMES.get(port_num, "Custom"))
+            banner = p.get("banner") or "-"
             risk = PLAINTEXT_RISK_PORTS.get(port_num, "Cifrado / Estándar")
+
+            if query:
+                match = (
+                    query in str(port_num)
+                    or query in service.lower()
+                    or query in banner.lower()
+                    or query in risk.lower()
+                )
+                if not match:
+                    continue
+
             tag = "risk_high" if port_num in PLAINTEXT_RISK_PORTS else "clean"
 
             status = p.get("status", "ESTABLE")
@@ -261,7 +287,7 @@ class NetSentryWindow(BaseToolWindow):
                     stab_str,
                     lat_str,
                     service,
-                    p.get("banner") or "-",
+                    banner,
                     risk,
                 ),
                 tags=(tag,)

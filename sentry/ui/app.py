@@ -288,20 +288,23 @@ class SentrySuiteApp(tk.Tk):
         from sentry.ui.quick_audit_dialog import QuickAuditDialog
         QuickAuditDialog(self)
 
-    def launch_tool(self, tool_id: str) -> None:
-        """Open the requested tool in a dedicated, independent desktop window."""
+    def launch_tool(self, tool_id: str, prefill_data: Optional[str] = None) -> Any:
+        """Open the requested tool in a dedicated, independent desktop window with optional prefilled target."""
         window_cls = TOOL_WINDOW_MAP.get(tool_id)
         if not window_cls:
             messagebox.showerror("Error", f"No se encontró la ventana gráfica para la herramienta '{tool_id}'.")
-            return
+            return None
 
         # Open in new independent desktop window
         win_instance = window_cls(master=self)
+        if prefill_data and hasattr(win_instance, "apply_prefill"):
+            win_instance.apply_prefill(prefill_data)
         win_instance.focus_set()
 
         if tool_id not in self.active_tool_windows:
             self.active_tool_windows[tool_id] = []
         self.active_tool_windows[tool_id].append(win_instance)
+        return win_instance
 
     def _check_network_status(self) -> None:
         try:

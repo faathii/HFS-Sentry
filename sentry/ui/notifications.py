@@ -10,16 +10,34 @@ import tkinter as tk
 from sentry.ui.theme import COLORS, FONTS
 
 
-def notify_user(title: str, message: str, level: str = "info", duration_ms: int = 4000) -> None:
-    """Display non-blocking desktop toast banner with audio beep."""
-    # System sound (Windows)
+def play_audio_cue(level: str = "info") -> None:
+    """Play subtle native sound according to threat level if enabled in config."""
+    try:
+        from sentry.core.config import get_config_val
+        if not get_config_val("sound_alerts_enabled", True):
+            return
+    except Exception:
+        pass
+
     try:
         if sys.platform == "win32":
             import winsound
-            freq = winsound.MB_ICONASTERISK if level == "info" else winsound.MB_ICONEXCLAMATION
-            winsound.MessageBeep(freq)
+            if level == "critical":
+                winsound.MessageBeep(winsound.MB_ICONHAND)
+            elif level in ("warning", "error"):
+                winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+            else:
+                winsound.MessageBeep(winsound.MB_ICONASTERISK)
+        else:
+            sys.stdout.write("\a")
+            sys.stdout.flush()
     except Exception:
         pass
+
+
+def notify_user(title: str, message: str, level: str = "info", duration_ms: int = 4000) -> None:
+    """Display non-blocking desktop toast banner with audio beep."""
+    play_audio_cue(level)
 
     # Launch toast in main thread if possible, or via thread-safe handler
     try:

@@ -69,10 +69,15 @@ class LogSentinelWindow(BaseToolWindow):
         row2.pack(fill="x", pady=(2, 2))
 
         btn_sample = ttk.Button(row2, text="Muestra Access.log", command=self._load_sample_access)
-        btn_sample.pack(side="left", padx=(0, 8))
+        btn_sample.pack(side="left", padx=(0, 6))
 
-        self.btn_gen_fw = ttk.Button(row2, text="🛡️ Script Firewall (.sh)", command=self.export_firewall_script)
-        self.btn_gen_fw.pack(side="left", padx=(0, 12))
+        self.btn_gen_fw = ttk.Button(row2, text="🛡️ Firewall (.sh)", command=self.export_firewall_script)
+        self.btn_gen_fw.pack(side="left", padx=(0, 8))
+
+        ttk.Label(row2, text="Filtrar:", style="Card.TLabel").pack(side="left", padx=(0, 4))
+        self.entry_filter = ttk.Entry(row2, width=14)
+        self.entry_filter.pack(side="left", padx=(0, 8))
+        self.entry_filter.bind("<KeyRelease>", lambda e: self._render_threats())
 
         self.banner_var = tk.StringVar(value="Listo para auditar registros del sistema.")
         self.lbl_banner = ttk.Label(row2, textvariable=self.banner_var, font=FONTS["code_small"], foreground=COLORS["accent_cyan"])
@@ -221,14 +226,29 @@ class LogSentinelWindow(BaseToolWindow):
         for item in self.tree.get_children():
             self.tree.delete(item)
 
+        query = self.entry_filter.get().strip().lower()
+
         for t in getattr(self, "current_threats", []):
-            sev = t["severity"]
-            tag = f"sev_{sev.lower()}"
+            ip = t["ip"]
+            reasons_str = " | ".join(t["reasons"])
             sample = t["sample_payloads"][0] if t["sample_payloads"] else "-"
+            sev = t["severity"]
+
+            if query:
+                match = (
+                    query in ip.lower()
+                    or query in reasons_str.lower()
+                    or query in sample.lower()
+                    or query in sev.lower()
+                )
+                if not match:
+                    continue
+
+            tag = f"sev_{sev.lower()}"
             total_attempts = t["ssh_failed_count"] + t["traversal_count"] + t["exploit_attempts"]
             self.tree.insert(
                 "", "end",
-                values=(sev, t["ip"], " | ".join(t["reasons"]), total_attempts, sample),
+                values=(sev, ip, reasons_str, total_attempts, sample),
                 tags=(tag,)
             )
 

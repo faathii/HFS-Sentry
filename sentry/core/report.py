@@ -65,9 +65,10 @@ def generate_html_report(data: Dict[str, Any], title: Optional[str] = None) -> s
 
     # Render tables if list of dicts present
     table_sections = []
-    for k, v in data.items():
+    for idx, (k, v) in enumerate(data.items()):
         if isinstance(v, list) and v and isinstance(v[0], dict):
             table_title = k.replace("_", " ").title()
+            table_id = f"table_{idx}"
             headers = list(v[0].keys())
             header_html = "".join(f"<th>{h.replace('_', ' ').upper()}</th>" for h in headers)
 
@@ -78,7 +79,6 @@ def generate_html_report(data: Dict[str, Any], title: Optional[str] = None) -> s
                     val = item.get(h, "")
                     if isinstance(val, list):
                         val = ", ".join(str(x) for x in val)
-                    # Color tag for status/risk
                     val_str = str(val)
                     cell_class = ""
                     if any(term in val_str.lower() for term in ("crit", "fail", "risk", "high", "modifi")):
@@ -93,9 +93,12 @@ def generate_html_report(data: Dict[str, Any], title: Optional[str] = None) -> s
 
             table_sections.append(f"""
                 <div class="card">
-                    <h3 class="card-title">{table_title} ({len(v)} entries)</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 14px;">
+                        <h3 class="card-title" style="margin: 0; border: none; padding: 0;">{table_title} ({len(v)} entries)</h3>
+                        <input type="text" class="search-box" placeholder="🔍 Filtrar registros..." onkeyup="filterReportTable(this, '{table_id}')">
+                    </div>
                     <div class="table-container">
-                        <table>
+                        <table id="{table_id}">
                             <thead><tr>{header_html}</tr></thead>
                             <tbody>{''.join(rows_html)}</tbody>
                         </table>
@@ -246,7 +249,85 @@ def generate_html_report(data: Dict[str, Any], title: Optional[str] = None) -> s
             padding: 16px;
             border-top: 1px solid var(--border);
         }}
+        .btn-print {{
+            background: linear-gradient(135deg, #00d2ff, #2979ff);
+            color: #ffffff;
+            border: none;
+            padding: 8px 18px;
+            font-size: 13px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            margin-right: 12px;
+        }}
+        .btn-print:hover {{ opacity: 0.9; }}
+        .search-box {{
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            width: 220px;
+        }}
+        .search-box:focus {{
+            outline: none;
+            border-color: var(--accent-cyan);
+        }}
+        @media print {{
+            body {{
+                background: #ffffff !important;
+                color: #111827 !important;
+                padding: 0 !important;
+            }}
+            .header {{
+                border-bottom: 2px solid #374151 !important;
+            }}
+            .header h1 {{
+                color: #111827 !important;
+            }}
+            .card, .meta-item {{
+                background: #ffffff !important;
+                border: 1px solid #d1d5db !important;
+                color: #111827 !important;
+                page-break-inside: avoid;
+            }}
+            .card-title, .meta-label, th {{
+                color: #1f2937 !important;
+                background: #f3f4f6 !important;
+            }}
+            td {{
+                color: #111827 !important;
+                border-bottom: 1px solid #e5e7eb !important;
+            }}
+            .btn-print, .search-box {{
+                display: none !important;
+            }}
+            .badge {{
+                border: 1px solid #9ca3af !important;
+                color: #111827 !important;
+                background: #f3f4f6 !important;
+            }}
+            pre {{
+                background: #f8fafc !important;
+                color: #1e293b !important;
+                border: 1px solid #e2e8f0 !important;
+            }}
+        }}
     </style>
+    <script>
+    function filterReportTable(input, tableId) {{
+        var filter = input.value.toLowerCase();
+        var table = document.getElementById(tableId);
+        if (!table) return;
+        var trs = table.getElementsByTagName("tr");
+        for (var i = 1; i < trs.length; i++) {{
+            var rowText = trs[i].textContent.toLowerCase();
+            trs[i].style.display = rowText.indexOf(filter) > -1 ? "" : "none";
+        }}
+    }}
+    </script>
 </head>
 <body>
     <div class="header">
@@ -254,7 +335,10 @@ def generate_html_report(data: Dict[str, Any], title: Optional[str] = None) -> s
             <h1>{report_title}</h1>
             <p>Generado automáticamente por HFS-Sentry Suite &bull; {generated_at}</p>
         </div>
-        <div class="badge">AUDITADO POR HFS-SENTRY</div>
+        <div style="display: flex; align-items: center;">
+            <button onclick="window.print()" class="btn-print">🖨️ Imprimir / Guardar como PDF</button>
+            <div class="badge">AUDITADO POR HFS-SENTRY</div>
+        </div>
     </div>
 
     {gauge_html}

@@ -69,6 +69,11 @@ class SubnetSweepWindow(BaseToolWindow):
         row2 = ttk.Frame(parent, style="Card.TFrame")
         row2.pack(fill="x", pady=(2, 2))
 
+        ttk.Label(row2, text="Filtrar:", style="Card.TLabel").pack(side="left", padx=(0, 6))
+        self.entry_filter = ttk.Entry(row2, width=16)
+        self.entry_filter.pack(side="left", padx=(0, 10))
+        self.entry_filter.bind("<KeyRelease>", lambda e: self._render_hosts())
+
         self.banner_var = tk.StringVar(value="Listo para escanear subred local.")
         self.lbl_banner = ttk.Label(row2, textvariable=self.banner_var, font=FONTS["code_small"], foreground=COLORS["accent_cyan"])
         self.lbl_banner.pack(side="left", fill="x", expand=True, padx=(0, 10))
@@ -208,11 +213,39 @@ class SubnetSweepWindow(BaseToolWindow):
         self.btn_stop.configure(state="disabled")
         self.banner_var.set("⏹ Barrido detenido por el operador.")
 
+    def apply_prefill(self, value: str) -> None:
+        """Prefill target subnet from cross-tool pivot."""
+        parts = value.split(".")
+        if len(parts) == 4:
+            cidr = f"{parts[0]}.{parts[1]}.{parts[2]}.0/24"
+        else:
+            cidr = value
+        self.entry_cidr.delete(0, "end")
+        self.entry_cidr.insert(0, cidr)
+        self.entry_cidr.focus_set()
+
     def _render_hosts(self) -> None:
         for item in self.tree.get_children():
             self.tree.delete(item)
 
+        query = self.entry_filter.get().strip().lower()
+
         for h in getattr(self, "all_hosts", []):
+            ip = h["ip"]
+            mac = h.get("mac", "-")
+            vendor = h.get("vendor", "-")
+            host_name = h.get("hostname", "-")
+
+            if query:
+                match = (
+                    query in ip.lower()
+                    or query in mac.lower()
+                    or query in vendor.lower()
+                    or query in host_name.lower()
+                )
+                if not match:
+                    continue
+
             status = h.get("status", "ACTIVO")
             is_new = h.get("is_new", False)
 
@@ -232,10 +265,10 @@ class SubnetSweepWindow(BaseToolWindow):
             self.tree.insert(
                 "", "end",
                 values=(
-                    h["ip"],
-                    h.get("mac", "-"),
-                    h.get("vendor", "-"),
-                    h.get("hostname", "-"),
+                    ip,
+                    mac,
+                    vendor,
+                    host_name,
                     status_disp,
                     dur_str,
                     first_seen_str,

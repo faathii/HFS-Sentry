@@ -67,6 +67,13 @@ class CertSentryWindow(BaseToolWindow):
         self.tree.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
 
+    def apply_prefill(self, value: str) -> None:
+        """Prefill TLS host from cross-tool pivot."""
+        clean = value.split(":")[0].replace("https://", "").replace("http://", "").split("/")[0]
+        self.entry_host.delete(0, "end")
+        self.entry_host.insert(0, clean)
+        self.entry_host.focus_set()
+
     def start_analysis(self) -> None:
         host = self.entry_host.get().strip().replace("https://", "").replace("http://", "").split("/")[0]
         if not host:

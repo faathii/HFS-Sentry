@@ -71,3 +71,4 @@ if __name__ == "__main__":
     badge = logo.resize((128, 128), Image.Resampling.LANCZOS)
     badge.save("assets/logos/badges/dnsprobe_badge.png", "PNG")
     print("[✔] Successfully created assets/logos/dnsprobe.png and badge!")
+

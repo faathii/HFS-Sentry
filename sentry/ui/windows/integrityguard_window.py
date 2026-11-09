@@ -79,6 +79,11 @@ class IntegrityGuardWindow(BaseToolWindow):
         self.btn_init = ttk.Button(row2, text="➕ Crear Línea Base (SHA-256)", command=self._create_baseline)
         self.btn_init.pack(side="left", padx=(0, 10))
 
+        ttk.Label(row2, text="Filtrar:", style="Card.TLabel").pack(side="left", padx=(0, 4))
+        self.entry_filter = ttk.Entry(row2, width=14)
+        self.entry_filter.pack(side="left", padx=(0, 10))
+        self.entry_filter.bind("<KeyRelease>", lambda e: self._render_results(getattr(self, "latest_results", {})))
+
         self.banner_var = tk.StringVar(value="Listo para auditar la integridad de archivos críticos.")
         self.lbl_banner = ttk.Label(row2, textvariable=self.banner_var, font=FONTS["code_small"], foreground=COLORS["accent_cyan"])
         self.lbl_banner.pack(side="left", fill="x", expand=True, padx=(0, 10))
@@ -240,14 +245,25 @@ class IntegrityGuardWindow(BaseToolWindow):
         for item in self.tree.get_children():
             self.tree.delete(item)
 
+        if not res:
+            return
+
+        query = self.entry_filter.get().strip().lower()
+
         for m in res.get("modified", []):
+            p = m["path"]
+            h = m["current_sha256"]
+            if query and query not in p.lower() and query not in h.lower() and query not in "modificado":
+                continue
             self.tree.insert(
                 "", "end",
-                values=(m["path"], "⚠️ MODIFICADO (ALTERADO)", m["current_sha256"], f"{m['current_size']} B", m["current_mtime"]),
+                values=(p, "⚠️ MODIFICADO (ALTERADO)", h, f"{m['current_size']} B", m["current_mtime"]),
                 tags=("status_modified",)
             )
 
         for d in res.get("deleted", []):
+            if query and query not in d.lower() and query not in "eliminado":
+                continue
             self.tree.insert(
                 "", "end",
                 values=(d, "❌ ELIMINADO", "-", "-", "-"),
@@ -255,11 +271,12 @@ class IntegrityGuardWindow(BaseToolWindow):
             )
 
         if not res.get("tampered"):
-            self.tree.insert(
-                "", "end",
-                values=("Todos los archivos verificados", "✔ ÍNTEGRO (100% COINCIDENTE)", "SHA-256 verificado", "-", "-"),
-                tags=("status_intact",)
-            )
+            if not query or query in "integro" or query in "sha-256":
+                self.tree.insert(
+                    "", "end",
+                    values=("Todos los archivos verificados", "✔ ÍNTEGRO (100% COINCIDENTE)", "SHA-256 verificado", "-", "-"),
+                    tags=("status_intact",)
+                )
 
     def _update_summary(self, res: Dict[str, Any], baseline_file: str) -> None:
         def _render():
