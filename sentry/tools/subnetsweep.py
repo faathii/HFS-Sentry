@@ -149,10 +149,15 @@ def scan_single_host(ip: str, use_icmp: bool = True) -> Optional[Dict[str, Any]]
     if not is_alive:
         return None
 
-    # Hostname reverse lookup
+    # Hostname reverse lookup with rapid timeout
     hostname = ""
     try:
-        hostname = socket.gethostbyaddr(ip)[0]
+        orig_timeout = socket.getdefaulttimeout()
+        socket.setdefaulttimeout(0.3)
+        try:
+            hostname = socket.gethostbyaddr(ip)[0]
+        finally:
+            socket.setdefaulttimeout(orig_timeout)
     except Exception:
         pass
 

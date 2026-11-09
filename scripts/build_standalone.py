@@ -43,9 +43,10 @@ def build_executable():
         "--noconsole",
         f"--icon={icon_path}",
         f"--add-data={data_arg}",
-        "--clean",
-        "sentry.py",
     ]
+    if os.path.isdir("examples"):
+        cmd.append(f"--add-data=examples{sep}examples")
+    cmd.extend(["--clean", "sentry.py"])
 
     print("\n[+] Ejecutando PyInstaller para compilar HFS-Sentry.exe...")
     print(f"Comando: {' '.join(cmd)}\n")

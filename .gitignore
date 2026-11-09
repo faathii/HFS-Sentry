@@ -41,6 +41,7 @@ env/
 
 # User & local data
 sentry_config.json
+*.spec
 *.jsonl
 *.log
 
